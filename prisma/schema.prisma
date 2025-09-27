@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int            @id @default(autoincrement())
+  username       String         @unique
+  password       String
+  hp             Int
+  energy         Int
+  gold           Int
+  attack_power   Int
+  current_day    Int
+  is_alive       Boolean        @default(true)
+
+  story_progress StoryProgress[]
+  inventory      Inventory[]
+  team_members   TeamMember[]
+
+  @@map("users")
+}
+
+model StoryProgress {
+  id                  Int   @id @default(autoincrement())
+  user_id             Int
+  current_chapter     Int
+  last_node_id        Int
+  investigation_count Int
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("story_progress")
+}
+
+model Item {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String
+  type        ItemType
+
+  inventory   Inventory[]
+  raid_items  RaidItem[]
+
+  @@map("items")
+}
+
+model Inventory {
+  id       Int  @id @default(autoincrement())
+  user_id  Int
+  item_id  Int
+  quantity Int
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@map("inventory")
+}
+
+model RaidTeam {
+  id      Int        @id @default(autoincrement())
+  day     Int
+  status  RaidStatus
+  boss_id Int
+
+  boss         Boss         @relation(fields: [boss_id], references: [id])
+  team_members TeamMember[]
+  raid_items   RaidItem[]
+
+  @@map("raid_teams")
+}
+
+model TeamMember {
+  id       Int @id @default(autoincrement())
+  team_id  Int
+  user_id  Int
+
+  team RaidTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("team_members")
+}
+
+model RaidItem {
+  id       Int @id @default(autoincrement())
+  team_id  Int
+  item_id  Int
+  quantity Int
+
+  team RaidTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  item Item     @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@map("raid_items")
+}
+
+model Boss {
+  id     Int    @id @default(autoincrement())
+  name   String
+  hp     Int
+  skills String
+
+  raid_teams RaidTeam[]
+
+  @@map("bosses")
+}
+
+enum ItemType {
+  story
+  raid
+}
+
+enum RaidStatus {
+  ongoing
+  cleared
+  failed
+}
