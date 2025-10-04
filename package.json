@@ -10,6 +10,7 @@
     "db:clear": "ts-node src/lib/clearData.ts",
     "db:seed": "ts-node src/lib/seed.ts",
     "db:seed-isPick": "ts-node src/lib/seedIsPick.ts",
+    "create-user": "ts-node src/lib/createUser.ts",
     "postinstall": "prisma generate"
   },
   "keywords": [],

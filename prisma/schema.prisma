@@ -17,9 +17,13 @@ model User {
   current_day    Int
   is_alive       Boolean        @default(true)
 
-  story_progress StoryProgress[]
-  inventory      Inventory[]
-  team_members   TeamMember[]
+  story_progress        StoryProgress[]
+  inventory             Inventory[]
+  team_members          TeamMember[]
+  user_abilities        UserAbility[]        // 레이드용 능력
+  user_story_abilities  UserStoryAbility[]   // 스토리용 능력
+  user_story_items      UserStoryItem[]      // 스토리용 아이템
+  checkpoints           UserCheckpoint[]     // 체크포인트
 
   @@map("users")
 }
@@ -30,10 +34,25 @@ model StoryProgress {
   current_chapter     Int
   last_node_id        Int
   investigation_count Int
+  checkpoint_count    Int   @default(0)
+  story_type          String @default("random") // random, main, checkpoint
+  temp_data           String? // 임시 데이터 저장용 (JSON)
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("story_progress")
+}
+
+model RandomStory {
+  id              Int      @id @default(autoincrement())
+  title           String
+  description     String
+  choices         String   // JSON array of choices
+  outcomes        String   // JSON array of outcomes with conditions and rewards
+  requirements    String?  // JSON object for requirements (skills, items, etc.)
+  category        String?  // 분류 (encounter, location, event, etc.)
+  
+  @@map("random_stories")
 }
 
 model Item {
@@ -116,4 +135,108 @@ enum RaidStatus {
   ongoing
   cleared
   failed
+}
+
+// 레이드용 능력 시스템
+model Ability {
+  id              Int           @id @default(autoincrement())
+  name            String
+  description     String
+  effect_type     String        // attack, defense, support, etc.
+  effect_value    Int
+  
+  user_abilities  UserAbility[]
+
+  @@map("abilities")
+}
+
+model UserAbility {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  ability_id  Int
+  is_active   Boolean  @default(false)
+  obtained_at DateTime @default(now())
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ability Ability @relation(fields: [ability_id], references: [id], onDelete: Cascade)
+
+  @@map("user_abilities")
+}
+
+// 스토리용 능력 시스템 (관찰력, 근력, 민첩함 등)
+model StoryAbility {
+  id              Int                  @id @default(autoincrement())
+  name            String
+  description     String
+  
+  user_story_abilities  UserStoryAbility[]
+
+  @@map("story_abilities")
+}
+
+model UserStoryAbility {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  story_ability_id Int
+  quantity         Int      @default(1)
+  obtained_at      DateTime @default(now())
+
+  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  story_ability StoryAbility @relation(fields: [story_ability_id], references: [id], onDelete: Cascade)
+
+  @@map("user_story_abilities")
+}
+
+model StoryItem {
+  id               Int      @id @default(autoincrement())
+  name             String
+  description      String?
+  created_at       DateTime @default(now())
+
+  user_story_items UserStoryItem[]
+
+  @@map("story_items")
+}
+
+model UserStoryItem {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  story_item_id  Int
+  quantity       Int      @default(1)
+  obtained_at    DateTime @default(now())
+
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  story_item StoryItem  @relation(fields: [story_item_id], references: [id], onDelete: Cascade)
+
+  @@map("user_story_items")
+}
+
+model UserCheckpoint {
+  id           Int      @id @default(autoincrement())
+  user_id      Int
+  node_id      Int
+  title        String
+  description  String?
+  hp           Int
+  energy       Int
+  gold         Int
+  saved_at     DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_checkpoints")
+}
+
+model MainStory {
+  id              Int      @id @default(autoincrement())
+  node_id         Int      @unique
+  title           String
+  text            String
+  node_type       String   // 'main', 'checkpoint'
+  route_name      String?  // '루트 1', '루트 2', etc.
+  choices         String   // JSON array of choices
+  rewards         String?  // JSON object of rewards
+  created_at      DateTime @default(now())
+
+  @@map("main_stories")
 }

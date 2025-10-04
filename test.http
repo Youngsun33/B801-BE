@@ -1,0 +1,68 @@
+### API 테스트 파일
+### VS Code에서 "REST Client" 확장 설치 후 사용
+
+### 1. 헬스 체크
+GET http://localhost:5000/health
+
+###
+
+### 2. 서버 시간
+GET http://localhost:5000/api/system/time
+
+###
+
+### 3. 회원가입
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser3",
+  "password": "password123"
+}
+
+###
+
+### 4. 로그인
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "password123"
+}
+
+###
+
+### 5. 현재 페이즈 정보
+GET http://localhost:5000/api/system/phase
+
+###
+
+### 6. 오늘의 스케줄
+GET http://localhost:5000/api/system/schedule
+
+###
+
+### 7. 공지사항 조회
+GET http://localhost:5000/api/system/notices?limit=10
+
+###
+
+### 8. 내 프로필 (로그인 후 아래 ACCESS_TOKEN 교체)
+GET http://localhost:5000/api/users/me
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+###
+
+### 9. 스토리 액션 포인트 (로그인 후)
+GET http://localhost:5000/api/story/action-point
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+###
+
+### 10. 인벤토리 조회 (로그인 후)
+GET http://localhost:5000/api/inventory
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+###
+

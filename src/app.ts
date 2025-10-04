@@ -20,13 +20,23 @@ import shopRoutes from './routes/shop';
 import raidRoutes from './routes/raid';
 import bossRoutes from './routes/bosses';
 import leaderboardRoutes from './routes/leaderboards';
+import abilityRoutes from './routes/abilities';
+import storyAbilityRoutes from './routes/storyAbilities';
+import storyItemRoutes from './routes/storyItems';
+import checkpointRoutes from './routes/checkpoints';
+import mainStoryRoutes from './routes/mainStory';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -44,6 +54,11 @@ app.use('/api/shop', shopRoutes);
 app.use('/api/raid', raidRoutes);
 app.use('/api/bosses', bossRoutes);
 app.use('/api/leaderboards', leaderboardRoutes);
+app.use('/api/abilities', abilityRoutes);
+app.use('/api/story-abilities', storyAbilityRoutes);
+app.use('/api/story-items', storyItemRoutes);
+app.use('/api/checkpoints', checkpointRoutes);
+app.use('/api/main-story', mainStoryRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

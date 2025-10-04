@@ -127,7 +127,13 @@ export const login = async (req: Request, res: Response) => {
       refreshToken,
       user: {
         id: user.id,
-        username: user.username
+        username: user.username,
+        hp: user.hp,
+        energy: user.energy,
+        gold: user.gold,
+        attack_power: user.attack_power,
+        current_day: user.current_day,
+        is_alive: user.is_alive
       }
     });
 

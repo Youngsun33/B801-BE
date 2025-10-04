@@ -24,13 +24,19 @@ export const getActionPointStatus = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
 
-    // 실제로는 DB에서 유저별 행동력 상태를 관리해야 하지만,
-    // 현재 스키마에 없으므로 임시로 시간 기반 계산
-    const now = new Date();
-    const dayStart = new Date(now);
-    dayStart.setHours(9, 0, 0, 0); // 오전 9시 기준
+    // DB에서 실제 행동력 상태 조회
+    const progress = await prisma.storyProgress.findFirst({
+      where: { user_id: userId }
+    });
 
     let current = MAX_ACTION_POINTS;
+    
+    // 진행상황이 있으면 DB 값 사용
+    if (progress) {
+      current = progress.investigation_count;
+    }
+
+    const now = new Date();
     let nextRechargeAtIso: string | null = null;
 
     // 간단한 예시: 하루에 3번 충전 (9시, 17시, 1시)
@@ -67,7 +73,7 @@ export const getActionPointStatus = async (req: Request, res: Response) => {
 // 페이즈 체크 함수
 const isInvestigationPhase = (): boolean => {
   // 개발 환경에서는 항상 허용
-  if (process.env.NODE_ENV === 'development') {
+  if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
     return true;
   }
   
@@ -118,12 +124,104 @@ export const getStoryNode = async (req: Request, res: Response) => {
       return res.status(400).json({ error: '유효하지 않은 노드 ID입니다.' });
     }
 
-    const node = STORY_NODES[nodeIdNum];
-    if (!node) {
-      return res.status(404).json({ error: '해당 스토리 노드를 찾을 수 없습니다.' });
+    const userId = req.user!.userId;
+
+    // 노드 조회: 400번 이상이면 메인 스토리 DB에서, 아니면 storyNodes에서
+    let node: any;
+    if (nodeIdNum >= 400) {
+      console.log('메인 스토리 DB에서 노드 조회:', nodeIdNum);
+      const mainStoryNode = await prisma.mainStory.findUnique({
+        where: { node_id: nodeIdNum }
+      });
+      
+      if (!mainStoryNode) {
+        return res.status(404).json({ error: '메인 스토리 노드를 찾을 수 없습니다.' });
+      }
+      
+      // MainStory를 StoryNode 형식으로 변환
+      node = {
+        nodeId: mainStoryNode.node_id,
+        text: mainStoryNode.text,
+        choices: JSON.parse(mainStoryNode.choices),
+        rewards: mainStoryNode.rewards ? JSON.parse(mainStoryNode.rewards) : undefined,
+        nodeType: mainStoryNode.node_type
+      };
+    } else {
+      node = STORY_NODES[nodeIdNum];
+      if (!node) {
+        return res.status(404).json({ error: '해당 스토리 노드를 찾을 수 없습니다.' });
+      }
     }
 
-    const userId = req.user!.userId;
+    // 노드 200번: 랜덤 능력 2개 부여
+    if (nodeIdNum === 200) {
+      const abilityPool = [
+        { id: 1, name: '관찰력', desc: '당신의 장점은 눈이 아주 좋다는 것입니다. 다른 사람이 쉽게 찾지 못할 것들도 매의 눈으로 찾아내기 마련이죠.' },
+        { id: 2, name: '근력', desc: '당신의 장점은 힘이 아주 세다는 겁니다. 이 같은 세상에서 힘이란 무엇과도 바꿀 수 없는 능력입니다.' },
+        { id: 3, name: '민첩함', desc: '당신의 장점은 다리가 아주 빠르다는 겁니다. 웬만한 사람들은 당신이 마음만 먹으면 모두 따돌릴 수 있습니다. 물론 기계 앞에서는 무용지물이겠지만요.' },
+        { id: 4, name: '은신술', desc: '당신은 인기척을 숨기는 데 달인입니다. 이상한 피에로 옷만 입지 않는 이상 당신이 마음만 먹으면 몰래 다니는 것쯤이야 아주 쉬운 일입니다.' },
+        { id: 5, name: '손재주', desc: '당신은 손으로 만드는 모든 것에 재능이 있습니다. 만들기, 기계 수리, 많게는 도박까지……. 뭐, 거기까지 쓸 일이 있겠어요.' },
+        { id: 6, name: '언변술', desc: '당신은 말의 귀재입니다. 입 하나로 잘하면 차까지 살 수 있을 정도예요. 조금 더 노력하면 나라까지 얻을 수 있지 않겠어요?' },
+        { id: 7, name: '매력', desc: '당신의 장점은 멋진 외모! 모두가 당신을 보는 순간 깊은 매력에 빠지게 될 겁니다.' },
+        { id: 8, name: '직감', desc: '하잘것없어 보여도 세상 무엇보다도 귀한 재능이 바로 직감입니다. 당신은 빠른 눈치로 모든 장애물을 헤쳐 나갈 수 있을 겁니다.' }
+      ];
+
+      // 진행상황 조회
+      const progress = await prisma.storyProgress.findFirst({
+        where: { user_id: userId }
+      });
+      
+      let selectedIds: number[] = [];
+      
+      // temp_data에 이미 저장된 능력이 있는지 확인
+      if (progress?.temp_data) {
+        try {
+          const tempData = JSON.parse(progress.temp_data);
+          if (tempData.selectedAbilities && Array.isArray(tempData.selectedAbilities)) {
+            selectedIds = tempData.selectedAbilities;
+            console.log('기존 temp_data에서 능력 로드:', selectedIds);
+          }
+        } catch (e) {
+          console.error('temp_data 파싱 실패:', e);
+        }
+      }
+      
+      // temp_data가 없으면 새로 랜덤 선택
+      if (selectedIds.length === 0) {
+        const shuffled = abilityPool.sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, 2);
+        selectedIds = selected.map(a => a.id);
+        
+        // temp_data에 저장
+        if (progress) {
+          await prisma.storyProgress.update({
+            where: { id: progress.id },
+            data: {
+              temp_data: JSON.stringify({
+                selectedAbilities: selectedIds
+              })
+            }
+          });
+        }
+        console.log('새로운 능력 랜덤 선택 및 저장:', selectedIds);
+      }
+      
+      // ID로부터 능력 정보 추출
+      const selected = abilityPool.filter(a => selectedIds.includes(a.id));
+      
+      // 텍스트 생성: + 능력명\n\n설명
+      const abilityText = selected.map(a => `+ ${a.name}\n\n${a.desc}`).join('\n\n');
+      
+      // 노드 복사본 생성
+      node = {
+        ...node,
+        text: abilityText,
+        rewards: {
+          ...node.rewards,
+          abilities: selected.map(a => ({ abilityId: a.id }))
+        }
+      };
+    }
 
     // 사용자 인벤토리 조회 (아이템 요구사항 체크용)
     const userInventory = await prisma.inventory.findMany({
@@ -132,7 +230,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
     });
 
     // 선택지에서 아이템 요구사항 체크
-    const availableChoices = node.choices.filter(choice => {
+    const availableChoices = node.choices.filter((choice: any) => {
       if (!choice.requiresItemId) return true;
       
       return userInventory.some((inv: any) => 
@@ -155,50 +253,252 @@ export const getStoryNode = async (req: Request, res: Response) => {
 
 export const chooseStoryOption = async (req: Request, res: Response) => {
   try {
+    console.log('=== chooseStoryOption 시작 ===');
+    console.log('요청 body:', req.body);
+    
     if (!isInvestigationPhase()) {
+      console.log('조사 페이즈 체크 실패');
       return res.status(409).json({ error: '조사 페이즈가 아닙니다.' });
     }
 
     const userId = req.user!.userId;
+    console.log('사용자 ID:', userId);
+    
     const { choiceId } = chooseSchema.parse(req.body);
+    console.log('선택지 ID:', choiceId);
 
     // 사용자 스토리 진행상황 조회
     const progress = await prisma.storyProgress.findFirst({
       where: { user_id: userId }
     });
+    console.log('진행상황:', progress);
 
     if (!progress) {
+      console.log('진행상황 없음');
       return res.status(404).json({ error: '스토리 진행 상황을 찾을 수 없습니다.' });
     }
 
-    // 행동력 체크
-    if (progress.investigation_count <= 0) {
-      return res.status(409).json({ error: '행동력이 부족합니다.' });
+    // 현재 노드가 메인 스토리인지 확인 (400번 이상)
+    const currentNodeId = progress.last_node_id;
+    let nextNodeId: number | string | undefined;
+    
+    if (currentNodeId >= 400) {
+      // 메인 스토리: 현재 노드의 선택지에서 targetNodeId 찾기
+      console.log('메인 스토리에서 선택지 처리');
+      const currentMainStoryNode = await prisma.mainStory.findUnique({
+        where: { node_id: currentNodeId }
+      });
+      
+      if (!currentMainStoryNode) {
+        return res.status(404).json({ error: '현재 메인 스토리 노드를 찾을 수 없습니다.' });
+      }
+      
+      const currentChoices = JSON.parse(currentMainStoryNode.choices);
+      const selectedChoice = currentChoices.find((c: any) => c.id === choiceId);
+      
+      if (!selectedChoice) {
+        return res.status(400).json({ error: '유효하지 않은 선택입니다.' });
+      }
+      
+      nextNodeId = selectedChoice.targetNodeId || choiceId;
+      console.log('메인 스토리 다음 노드 ID:', nextNodeId);
+    } else {
+      // 일반 스토리: CHOICE_TO_NODE 매핑 사용
+      nextNodeId = CHOICE_TO_NODE[choiceId];
+      console.log('일반 스토리 다음 노드 ID:', nextNodeId);
+      
+      // 메인 스토리로 전환하는 특수 케이스 처리
+      if (nextNodeId === 'MAIN_STORY_ROUTE_1' || nextNodeId === 'MAIN_STORY_ROUTE_2' || nextNodeId === 'MAIN_STORY_ROUTE_3') {
+        console.log('메인 스토리로 전환:', nextNodeId);
+        
+        // DB에서 해당 루트의 첫 노드 찾기
+        let routeName = '';
+        if (nextNodeId === 'MAIN_STORY_ROUTE_1') routeName = '루트 1';
+        else if (nextNodeId === 'MAIN_STORY_ROUTE_2') routeName = '루트 2';
+        else if (nextNodeId === 'MAIN_STORY_ROUTE_3') routeName = '루트 3';
+        
+        const mainStoryNode = await prisma.mainStory.findFirst({
+          where: { 
+            title: routeName,
+            node_type: 'checkpoint'
+          }
+        });
+        
+        if (!mainStoryNode) {
+          console.log('메인 스토리 노드를 찾을 수 없음:', routeName);
+          return res.status(404).json({ error: '메인 스토리를 찾을 수 없습니다.' });
+        }
+        
+        nextNodeId = mainStoryNode.node_id;
+        console.log('메인 스토리 노드 ID로 변환:', nextNodeId);
+      }
     }
-
-    // 다음 노드 ID 확인
-    const nextNodeId = CHOICE_TO_NODE[choiceId];
+    
     if (!nextNodeId) {
+      console.log('유효하지 않은 선택:', choiceId);
       return res.status(404).json({ error: '유효하지 않은 선택입니다.' });
     }
 
-    const nextNode = STORY_NODES[nextNodeId];
-    if (!nextNode) {
-      return res.status(404).json({ error: '다음 스토리 노드를 찾을 수 없습니다.' });
+    // 숫자로 변환
+    const nextNodeIdNum = typeof nextNodeId === 'string' ? parseInt(nextNodeId) : nextNodeId;
+
+    // 노드 조회: 400번 이상이면 메인 스토리 DB에서, 아니면 storyNodes에서
+    let nextNode: any;
+    if (nextNodeIdNum >= 400) {
+      console.log('메인 스토리 DB에서 노드 조회:', nextNodeIdNum);
+      const mainStoryNode = await prisma.mainStory.findUnique({
+        where: { node_id: nextNodeIdNum }
+      });
+      
+      if (!mainStoryNode) {
+        return res.status(404).json({ error: '메인 스토리 노드를 찾을 수 없습니다.' });
+      }
+      
+      // MainStory를 StoryNode 형식으로 변환
+      nextNode = {
+        nodeId: mainStoryNode.node_id,
+        text: mainStoryNode.text,
+        choices: JSON.parse(mainStoryNode.choices),
+        rewards: mainStoryNode.rewards ? JSON.parse(mainStoryNode.rewards) : undefined,
+        nodeType: mainStoryNode.node_type
+      };
+    } else {
+      nextNode = STORY_NODES[nextNodeIdNum];
+      if (!nextNode) {
+        return res.status(404).json({ error: '다음 스토리 노드를 찾을 수 없습니다.' });
+      }
     }
 
     // 트랜잭션으로 보상 적용 및 진행상황 업데이트
     const result = await prisma.$transaction(async (tx: any) => {
-      // 행동력 1 소모
+      const delta: any = {};
+
+      // 노드 200에 도착하는 경우: 랜덤 능력 2개를 즉시 부여
+      let newTempData = progress.temp_data;
+      
+      if (nextNodeId === 200) {
+        console.log('노드 200 도착 - 능력 부여 시작');
+        
+        // temp_data가 있으면 사용, 없으면 새로 생성
+        let selectedAbilityIds: number[] = [];
+        
+        if (progress.temp_data) {
+          try {
+            const tempData = JSON.parse(progress.temp_data);
+            selectedAbilityIds = tempData.selectedAbilities || [];
+          } catch (e) {
+            console.error('temp_data 파싱 실패:', e);
+          }
+        }
+        
+        // temp_data가 없거나 비어있으면 랜덤 선택
+        if (selectedAbilityIds.length === 0) {
+          const abilityPool = [1, 2, 3, 4, 5, 6, 7, 8];
+          const shuffled = abilityPool.sort(() => 0.5 - Math.random());
+          selectedAbilityIds = shuffled.slice(0, 2);
+          
+          // 새로운 temp_data 준비
+          newTempData = JSON.stringify({
+            selectedAbilities: selectedAbilityIds
+          });
+        }
+        
+        console.log('선택된 능력 IDs:', selectedAbilityIds);
+        delta.abilities = [];
+        
+        // 능력 부여
+        for (const abilityId of selectedAbilityIds) {
+          const existingAbility = await tx.userStoryAbility.findFirst({
+            where: {
+              user_id: userId,
+              story_ability_id: abilityId
+            }
+          });
+
+          if (existingAbility) {
+            await tx.userStoryAbility.update({
+              where: { id: existingAbility.id },
+              data: {
+                quantity: existingAbility.quantity + 1
+              }
+            });
+          } else {
+            await tx.userStoryAbility.create({
+              data: {
+                user_id: userId,
+                story_ability_id: abilityId,
+                quantity: 1
+              }
+            });
+          }
+
+          const storyAbility = await tx.storyAbility.findUnique({
+            where: { id: abilityId }
+          });
+
+          delta.abilities.push({
+            abilityId: abilityId,
+            name: storyAbility?.name || 'Unknown'
+          });
+        }
+        
+        console.log('능력 부여 완료:', delta.abilities);
+      }
+
+      // 진행상황 업데이트: temp_data 처리
+      let finalTempData = newTempData;
+      
+      // 노드 200에서 나가는 경우: temp_data 클리어
+      if (choiceId === 2001) {
+        console.log('노드 200 탈출 - temp_data 클리어');
+        finalTempData = null;
+      }
+      // 노드 200이 아닌 다른 노드로 가는 경우: temp_data 클리어
+      else if (nextNodeId !== 200) {
+        finalTempData = null;
+      }
+      
       await tx.storyProgress.update({
         where: { id: progress.id },
         data: {
-          last_node_id: nextNodeId,
-          investigation_count: progress.investigation_count - 1
+          last_node_id: nextNodeIdNum,
+          temp_data: finalTempData
         }
       });
 
-      const delta: any = {};
+      // 체크포인트 자동 저장
+      if (nextNode.nodeType === 'checkpoint') {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (user) {
+          // 현재 유저의 체크포인트 개수 확인
+          const checkpointCount = await tx.userCheckpoint.count({
+            where: { user_id: userId }
+          });
+          
+          // 체크포인트 제목 생성 (1부터 시작)
+          const checkpointNumber = checkpointCount + 1;
+          const checkpointTitle = `체크포인트 ${checkpointNumber}`;
+          const checkpointDesc = nextNode.text.substring(0, 100) + '...';
+          
+          await tx.userCheckpoint.create({
+            data: {
+              user_id: userId,
+              node_id: nextNodeIdNum,
+              title: checkpointTitle,
+              description: checkpointDesc,
+              hp: user.hp,
+              energy: user.energy,
+              gold: user.gold
+            }
+          });
+
+          console.log(`체크포인트 저장: ${checkpointTitle}`);
+          delta.checkpoint = {
+            title: checkpointTitle,
+            message: '체크포인트 도달. 진행 상황이 저장되었습니다.'
+          };
+        }
+      }
 
       // 보상 적용
       if (nextNode.rewards) {
@@ -231,30 +531,35 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
           });
         }
 
-        // 아이템 보상 처리
+        // 스토리 아이템 보상 처리
         if (nextNode.rewards.items) {
-          delta.items = [];
+          if (!delta.items) delta.items = [];
           
           for (const itemReward of nextNode.rewards.items) {
-            const existingInventory = await tx.inventory.findFirst({
+            // 스토리 아이템 정보 조회
+            const storyItem = await tx.storyItem.findUnique({
+              where: { id: itemReward.itemId }
+            });
+
+            const existingStoryItem = await tx.userStoryItem.findFirst({
               where: {
                 user_id: userId,
-                item_id: itemReward.itemId
+                story_item_id: itemReward.itemId
               }
             });
 
-            if (existingInventory) {
-              await tx.inventory.update({
-                where: { id: existingInventory.id },
+            if (existingStoryItem) {
+              await tx.userStoryItem.update({
+                where: { id: existingStoryItem.id },
                 data: {
-                  quantity: existingInventory.quantity + itemReward.quantity
+                  quantity: existingStoryItem.quantity + itemReward.quantity
                 }
               });
             } else {
-              await tx.inventory.create({
+              await tx.userStoryItem.create({
                 data: {
                   user_id: userId,
-                  item_id: itemReward.itemId,
+                  story_item_id: itemReward.itemId,
                   quantity: itemReward.quantity
                 }
               });
@@ -262,13 +567,57 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
 
             delta.items.push({
               itemId: itemReward.itemId,
+              name: storyItem?.name || 'Unknown Item',
               qty: itemReward.quantity
+            });
+          }
+        }
+
+        // 스토리 능력 보상 처리
+        if (nextNode.rewards.abilities) {
+          if (!delta.abilities) delta.abilities = [];
+          
+          for (const abilityReward of nextNode.rewards.abilities) {
+            // 이미 보유한 스토리 능력인지 확인
+            const existingAbility = await tx.userStoryAbility.findFirst({
+              where: {
+                user_id: userId,
+                story_ability_id: abilityReward.abilityId
+              }
+            });
+
+            if (existingAbility) {
+              // 이미 있으면 quantity 증가
+              await tx.userStoryAbility.update({
+                where: { id: existingAbility.id },
+                data: {
+                  quantity: existingAbility.quantity + 1
+                }
+              });
+            } else {
+              // 없으면 새로 생성
+              await tx.userStoryAbility.create({
+                data: {
+                  user_id: userId,
+                  story_ability_id: abilityReward.abilityId,
+                  quantity: 1
+                }
+              });
+            }
+
+            const storyAbility = await tx.storyAbility.findUnique({
+              where: { id: abilityReward.abilityId }
+            });
+
+            delta.abilities.push({
+              abilityId: abilityReward.abilityId,
+              name: storyAbility?.name || 'Unknown'
             });
           }
         }
       }
 
-      return { delta, investigation_count: progress.investigation_count - 1 };
+      return { delta, investigation_count: progress.investigation_count };
     });
 
     return res.status(200).json({
@@ -330,46 +679,48 @@ export const enterStoryDay = async (req: Request, res: Response) => {
       where: { user_id: userId }
     });
 
-    const startNodeId = 1000 + (dayNum * 100) + 1; // 1001, 1101, 1201
+    const startNodeId = 100; // 인트로부터 시작
 
     if (progress) {
-      // 이미 해당 일차에 진입한 경우 idempotent
-      if (progress.current_chapter === dayNum) {
-        return res.status(200).json({
-          message: `${dayNum}일차에 이미 진입했습니다.`,
-          current_chapter: dayNum,
-          last_node_id: progress.last_node_id,
-          investigation_count: progress.investigation_count
-        });
+      // 조사 기회가 있는지 확인
+      if (progress.investigation_count <= 0) {
+        return res.status(409).json({ error: '조사 기회가 부족합니다.' });
       }
 
-      // 새로운 일차 시작
+      // 조사 기회 1회 소모 (게임 시작)
       await prisma.storyProgress.update({
         where: { id: progress.id },
         data: {
           current_chapter: dayNum,
           last_node_id: startNodeId,
-          investigation_count: MAX_ACTION_POINTS
+          investigation_count: progress.investigation_count - 1
         }
       });
+
+      return res.status(200).json({
+        message: `${dayNum}일차 게임을 시작합니다.`,
+        current_chapter: dayNum,
+        last_node_id: startNodeId,
+        investigation_count: progress.investigation_count - 1
+      });
     } else {
-      // 첫 진입
-      await prisma.storyProgress.create({
+      // 첫 진입 - 조사 기회 3회 부여
+      const newProgress = await prisma.storyProgress.create({
         data: {
           user_id: userId,
           current_chapter: dayNum,
           last_node_id: startNodeId,
-          investigation_count: MAX_ACTION_POINTS
+          investigation_count: MAX_ACTION_POINTS - 1 // 시작하면서 1회 소모
         }
       });
-    }
 
-    return res.status(200).json({
-      message: `${dayNum}일차에 진입했습니다.`,
-      current_chapter: dayNum,
-      last_node_id: startNodeId,
-      investigation_count: MAX_ACTION_POINTS
-    });
+      return res.status(200).json({
+        message: `${dayNum}일차 게임을 시작합니다.`,
+        current_chapter: dayNum,
+        last_node_id: startNodeId,
+        investigation_count: newProgress.investigation_count
+      });
+    }
 
   } catch (error) {
     console.error('Enter story day error:', error);
