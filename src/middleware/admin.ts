@@ -7,7 +7,7 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, username: true }
+      select: { id: true, username: true, role: true }
     });
 
     if (!user) {
@@ -15,11 +15,8 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    // 임시로 특정 사용자명을 관리자로 처리 (실제로는 role 필드 사용)
-    // 현재 스키마에 role이 없으므로 username으로 판단
-    const adminUsernames = ['admin', 'administrator', 'root'];
-    
-    if (!adminUsernames.includes(user.username.toLowerCase())) {
+    // role 필드로 관리자 권한 확인
+    if (user.role !== 'admin') {
       res.status(403).json({ error: '관리자 권한이 필요합니다.' });
       return;
     }

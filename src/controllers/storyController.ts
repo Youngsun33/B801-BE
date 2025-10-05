@@ -118,6 +118,31 @@ export const getStoryNode = async (req: Request, res: Response) => {
     }
 
     const { nodeId } = req.params;
+    
+    // RANDOM_STORY 처리
+    if (nodeId === 'RANDOM_STORY') {
+      console.log('랜덤 스토리 노드 요청');
+      // 랜덤 스토리 노드 선택 (1000번대)
+      const randomStories = Object.keys(STORY_NODES)
+        .map(Number)
+        .filter(id => id >= 1000 && id < 2000);
+      
+      if (randomStories.length === 0) {
+        return res.status(404).json({ error: '랜덤 스토리가 없습니다.' });
+      }
+      
+      const randomId = randomStories[Math.floor(Math.random() * randomStories.length)];
+      const randomNode = STORY_NODES[randomId];
+      console.log('선택된 랜덤 스토리:', randomId);
+      
+      return res.status(200).json({
+        nodeId: randomNode.nodeId,
+        text: randomNode.text,
+        choices: randomNode.choices,
+        rewards: randomNode.rewards
+      });
+    }
+    
     const nodeIdNum = parseInt(nodeId);
 
     if (isNaN(nodeIdNum)) {
@@ -302,6 +327,12 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       
       nextNodeId = selectedChoice.targetNodeId || choiceId;
       console.log('메인 스토리 다음 노드 ID:', nextNodeId);
+      
+      // 메인스토리에서 다음 노드가 없으면 랜덤 스토리로 연결
+      if (!nextNodeId || nextNodeId === choiceId) {
+        console.log('메인스토리에서 다음 노드 없음, 랜덤 스토리로 연결');
+        nextNodeId = 'RANDOM_STORY';
+      }
     } else {
       // 일반 스토리: CHOICE_TO_NODE 매핑 사용
       nextNodeId = CHOICE_TO_NODE[choiceId];
@@ -340,28 +371,57 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     }
 
     // 숫자로 변환
-    const nextNodeIdNum = typeof nextNodeId === 'string' ? parseInt(nextNodeId) : nextNodeId;
+
+    let nextNodeIdNum = typeof nextNodeId === 'string' ? parseInt(nextNodeId) : nextNodeId;
 
     // 노드 조회: 400번 이상이면 메인 스토리 DB에서, 아니면 storyNodes에서
     let nextNode: any;
-    if (nextNodeIdNum >= 400) {
+    if (nextNodeId === 'RANDOM_STORY') {
+      console.log('랜덤 스토리 노드 조회');
+      // 랜덤 스토리 노드 선택 (1000번대)
+      const randomStories = Object.keys(STORY_NODES)
+        .map(Number)
+        .filter(id => id >= 1000 && id < 2000);
+      
+      if (randomStories.length === 0) {
+        return res.status(404).json({ error: '랜덤 스토리가 없습니다.' });
+      }
+      
+      const randomId = randomStories[Math.floor(Math.random() * randomStories.length)];
+      nextNode = STORY_NODES[randomId];
+      nextNodeIdNum = randomId;
+      console.log('선택된 랜덤 스토리:', randomId);
+    } else if (nextNodeIdNum >= 400) {
       console.log('메인 스토리 DB에서 노드 조회:', nextNodeIdNum);
       const mainStoryNode = await prisma.mainStory.findUnique({
         where: { node_id: nextNodeIdNum }
       });
       
       if (!mainStoryNode) {
-        return res.status(404).json({ error: '메인 스토리 노드를 찾을 수 없습니다.' });
+        console.log('메인 스토리 노드 없음, 랜덤 스토리로 연결');
+        // 메인스토리 노드가 없으면 랜덤 스토리로 연결
+        const randomStories = Object.keys(STORY_NODES)
+          .map(Number)
+          .filter(id => id >= 1000 && id < 2000);
+        
+        if (randomStories.length === 0) {
+          return res.status(404).json({ error: '랜덤 스토리가 없습니다.' });
+        }
+        
+        const randomId = randomStories[Math.floor(Math.random() * randomStories.length)];
+        nextNode = STORY_NODES[randomId];
+        nextNodeIdNum = randomId;
+        console.log('메인스토리 없음, 랜덤 스토리로 연결:', randomId);
+      } else {
+        // MainStory를 StoryNode 형식으로 변환
+        nextNode = {
+          nodeId: mainStoryNode.node_id,
+          text: mainStoryNode.text,
+          choices: JSON.parse(mainStoryNode.choices),
+          rewards: mainStoryNode.rewards ? JSON.parse(mainStoryNode.rewards) : undefined,
+          nodeType: mainStoryNode.node_type
+        };
       }
-      
-      // MainStory를 StoryNode 형식으로 변환
-      nextNode = {
-        nodeId: mainStoryNode.node_id,
-        text: mainStoryNode.text,
-        choices: JSON.parse(mainStoryNode.choices),
-        rewards: mainStoryNode.rewards ? JSON.parse(mainStoryNode.rewards) : undefined,
-        nodeType: mainStoryNode.node_type
-      };
     } else {
       nextNode = STORY_NODES[nextNodeIdNum];
       if (!nextNode) {

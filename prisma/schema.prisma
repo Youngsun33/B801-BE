@@ -16,6 +16,7 @@ model User {
   attack_power   Int
   current_day    Int
   is_alive       Boolean        @default(true)
+  role           String         @default("user")  // "user", "admin", "moderator"
 
   story_progress        StoryProgress[]
   inventory             Inventory[]
@@ -236,6 +237,8 @@ model MainStory {
   route_name      String?  // '루트 1', '루트 2', etc.
   choices         String   // JSON array of choices
   rewards         String?  // JSON object of rewards
+  position_x      Int?     // Twine 에디터 X 좌표
+  position_y      Int?     // Twine 에디터 Y 좌표
   created_at      DateTime @default(now())
 
   @@map("main_stories")
