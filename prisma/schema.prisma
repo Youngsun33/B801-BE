@@ -235,11 +235,54 @@ model MainStory {
   text            String
   node_type       String   // 'main', 'checkpoint'
   route_name      String?  // '루트 1', '루트 2', etc.
-  choices         String   // JSON array of choices
+  choices         String   // JSON array of choices (기존 호환성 유지)
   rewards         String?  // JSON object of rewards
   position_x      Int?     // Twine 에디터 X 좌표
   position_y      Int?     // Twine 에디터 Y 좌표
+  image_url       String?  // 노드 이미지 URL
+  image_alt       String?  // 이미지 alt 텍스트
   created_at      DateTime @default(now())
 
+  // 새로운 관계들
+  story_choices   StoryChoice[]
+
   @@map("main_stories")
+}
+
+// 스토리 선택지 테이블
+model StoryChoice {
+  id              Int      @id @default(autoincrement())
+  story_node_id   Int      // MainStory의 node_id 참조
+  choice_text     String   // 선택지 텍스트
+  target_node_id  Int?     // 다음 노드 ID
+  order_index     Int      @default(0) // 선택지 순서
+  is_available    Boolean  @default(true) // 선택 가능 여부
+  
+  created_at      DateTime @default(now())
+
+  // 관계
+  story_node      MainStory @relation(fields: [story_node_id], references: [node_id], onDelete: Cascade)
+  
+  // 요구사항들
+  choice_requirements ChoiceRequirement[]
+
+  @@map("story_choices")
+}
+
+// 선택지 요구사항 테이블 (능력, 아이템 등)
+model ChoiceRequirement {
+  id              Int      @id @default(autoincrement())
+  choice_id       Int      // StoryChoice 참조
+  requirement_type String  // 'ability', 'item', 'stat', 'condition'
+  requirement_id  Int?     // 능력 ID, 아이템 ID 등 (null이면 직접 값)
+  requirement_value Int?   // 필요 수치 (능력 레벨, 아이템 개수 등)
+  operator        String   @default(">=") // '>=', '<=', '==', '>' 등
+  description     String?  // 요구사항 설명
+  
+  created_at      DateTime @default(now())
+
+  // 관계
+  choice          StoryChoice @relation(fields: [choice_id], references: [id], onDelete: Cascade)
+
+  @@map("choice_requirements")
 }

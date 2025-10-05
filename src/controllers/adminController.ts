@@ -144,7 +144,7 @@ export const getStoryNodes = async (req: Request, res: Response) => {
 export const updateStoryNode = async (req: Request, res: Response) => {
   try {
     const { nodeId } = req.params;
-    const { title, text, choices, rewards, route_name } = req.body;
+    const { title, text, choices, rewards, route_name, image_url, image_alt } = req.body;
 
     // 선택지를 JSON 배열로 변환
     let choicesArray: string[] = [];
@@ -170,15 +170,59 @@ export const updateStoryNode = async (req: Request, res: Response) => {
       }
     }
 
-    const updatedNode = await prisma.mainStory.update({
-      where: { node_id: parseInt(nodeId) },
-      data: {
-        title: title || undefined,
-        text: text || undefined,
-        choices: JSON.stringify(choicesArray),
-        rewards: rewardsObject ? JSON.stringify(rewardsObject) : null,
-        route_name: route_name || undefined
+    // 트랜잭션으로 MainStory와 StoryChoice를 함께 업데이트
+    const updatedNode = await prisma.$transaction(async (tx) => {
+      // MainStory 업데이트
+      const mainStory = await tx.mainStory.update({
+        where: { node_id: parseInt(nodeId) },
+        data: {
+          title: title || undefined,
+          text: text || undefined,
+          choices: JSON.stringify(choicesArray), // 기존 호환성 유지
+          rewards: rewardsObject ? JSON.stringify(rewardsObject) : null,
+          route_name: route_name || undefined,
+          image_url: image_url || undefined,
+          image_alt: image_alt || undefined
+        }
+      });
+
+      // 기존 StoryChoice 삭제
+      await tx.storyChoice.deleteMany({
+        where: { story_node_id: parseInt(nodeId) }
+      });
+
+      // 새로운 StoryChoice 생성
+      if (Array.isArray(choicesArray) && choicesArray.length > 0) {
+        for (let i = 0; i < choicesArray.length; i++) {
+          const choiceText = choicesArray[i];
+          
+          // choices가 JSON 문자열인 경우 파싱
+          let targetNodeId: number | null = null;
+          let choiceLabel = choiceText;
+          
+          try {
+            const parsedChoice = JSON.parse(choiceText);
+            if (parsedChoice && typeof parsedChoice === 'object') {
+              choiceLabel = parsedChoice.label || parsedChoice.text || choiceText;
+              targetNodeId = parsedChoice.targetNodeId || parsedChoice.target_node_id || null;
+            }
+          } catch {
+            // JSON이 아닌 경우 그대로 사용
+          }
+
+          await tx.storyChoice.create({
+            data: {
+              story_node_id: parseInt(nodeId),
+              choice_text: choiceLabel,
+              target_node_id: targetNodeId,
+              order_index: i,
+              is_available: true
+            }
+          });
+        }
       }
+
+      return mainStory;
     });
 
     return res.status(200).json({

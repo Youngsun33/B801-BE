@@ -8,6 +8,7 @@ import {
   getAdminStats,
   upload 
 } from '../controllers/adminController';
+import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
 import { authenticateAccessToken } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 
@@ -37,5 +38,12 @@ router.put('/story-nodes/:nodeId', updateStoryNode);
 
 // DELETE /api/admin/story-nodes/:nodeId
 router.delete('/story-nodes/:nodeId', deleteStoryNode);
+
+// 이미지 업로드 관련 라우트
+// POST /api/admin/upload/image
+router.post('/upload/image', uploadSingle, uploadImage);
+
+// DELETE /api/admin/upload/image/:filename
+router.delete('/upload/image/:filename', deleteImage);
 
 export default router;
