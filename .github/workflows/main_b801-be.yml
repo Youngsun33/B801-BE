@@ -34,7 +34,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: |
+            dist/
+            package.json
+            package-lock.json
+            prisma/
 
   deploy:
     runs-on: ubuntu-latest
@@ -49,9 +53,9 @@ jobs:
         with:
           name: node-app
       
-      - name: Generate Prisma Client
+      - name: Install dependencies and generate Prisma Client
         run: |
-          npm install
+          npm ci --production
           npx prisma generate
       
       - name: Login to Azure
@@ -68,6 +72,7 @@ jobs:
           app-name: 'B801-BE'
           slot-name: 'Production'
           package: .
+          startup-command: 'npm start'
           app-settings: |
             NODE_ENV=production
             PORT=8080
