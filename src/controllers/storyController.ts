@@ -129,13 +129,28 @@ export const getStoryNode = async (req: Request, res: Response) => {
       })
     );
 
+    // 활성 세션 정보 조회
+    const activeSession = await prisma.$queryRaw<any[]>`
+      SELECT hp, energy, gold_start FROM investigation_sessions 
+      WHERE user_id = ${userId} AND status = 'active'
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+
+    const sessionInfo = activeSession.length > 0 ? {
+      hp: activeSession[0].hp,
+      energy: activeSession[0].energy,
+      gold: activeSession[0].gold_start
+    } : null;
+
     return res.status(200).json({
       nodeId: nodeData.node_id,
       title: nodeData.title,
       text: nodeText,
       nodeType: nodeData.node_type,
       choices: choicesWithConstraints,
-      rewards
+      rewards,
+      session: sessionInfo
     });
 
   } catch (error) {
@@ -258,17 +273,69 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
             delta.gold = result.value_change;
             console.log('돈 업데이트:', user.gold, '→', newGold);
           } else if (result.name === '체력') {
-            const newHp = Math.max(0, Math.min(100, user.hp + result.value_change));
-            await prisma.$executeRaw`
-              UPDATE users SET hp = ${newHp} WHERE id = ${userId}
+            // 세션에서 현재 HP 가져오기
+            const session = await prisma.$queryRaw<any[]>`
+              SELECT hp FROM investigation_sessions 
+              WHERE user_id = ${userId} AND status = 'active'
+              LIMIT 1
             `;
+            
+            const currentHp = session.length > 0 ? session[0].hp : 3;
+            const newHp = Math.max(0, Math.min(3, currentHp + result.value_change));
+            
+            // 세션 HP 업데이트
+            await prisma.$executeRaw`
+              UPDATE investigation_sessions 
+              SET hp = ${newHp}
+              WHERE user_id = ${userId} AND status = 'active'
+            `;
+            
             delta.hp = result.value_change;
+            console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
+            
+            // 체력이 0이 되면 조사 종료
+            if (newHp <= 0) {
+              delta.sessionEnded = true;
+              delta.endReason = 'hp_depleted';
+              await prisma.$executeRaw`
+                UPDATE investigation_sessions 
+                SET status = 'completed', ended_at = CURRENT_TIMESTAMP, hp = 0
+                WHERE user_id = ${userId} AND status = 'active'
+              `;
+              console.log('체력 소진 - 조사 종료');
+            }
           } else if (result.name === '정신력' || result.name === '에너지') {
-            const newEnergy = Math.max(0, Math.min(100, user.energy + result.value_change));
-            await prisma.$executeRaw`
-              UPDATE users SET energy = ${newEnergy} WHERE id = ${userId}
+            // 세션에서 현재 에너지 가져오기
+            const session = await prisma.$queryRaw<any[]>`
+              SELECT energy FROM investigation_sessions 
+              WHERE user_id = ${userId} AND status = 'active'
+              LIMIT 1
             `;
+            
+            const currentEnergy = session.length > 0 ? session[0].energy : 3;
+            const newEnergy = Math.max(0, Math.min(3, currentEnergy + result.value_change));
+            
+            // 세션 에너지 업데이트
+            await prisma.$executeRaw`
+              UPDATE investigation_sessions 
+              SET energy = ${newEnergy}
+              WHERE user_id = ${userId} AND status = 'active'
+            `;
+            
             delta.energy = result.value_change;
+            console.log('정신력 업데이트:', currentEnergy, '→', newEnergy, '(변화:', result.value_change, ')');
+            
+            // 정신력이 0이 되면 조사 종료
+            if (newEnergy <= 0) {
+              delta.sessionEnded = true;
+              delta.endReason = 'energy_depleted';
+              await prisma.$executeRaw`
+                UPDATE investigation_sessions 
+                SET status = 'completed', ended_at = CURRENT_TIMESTAMP, energy = 0
+                WHERE user_id = ${userId} AND status = 'active'
+              `;
+              console.log('정신력 소진 - 조사 종료');
+            }
           }
         }
           } else {
@@ -290,6 +357,21 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
             INSERT INTO user_resources (user_id, resource_id, quantity)
             VALUES (${userId}, ${result.resource_id}, ${result.value_change})
           `;
+        }
+
+        // delta에 추가 (알람용)
+        if (result.type === 'ITEM') {
+          if (!delta.items) delta.items = [];
+          delta.items.push({
+            name: result.name,
+            qty: result.value_change
+          });
+        } else if (result.type === 'SKILL') {
+          if (!delta.abilities) delta.abilities = [];
+          delta.abilities.push({
+            name: result.name,
+            description: result.description || ''
+          });
         }
 
         delta[result.name] = result.value_change;
@@ -392,12 +474,16 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         message: '엔딩에 도달했습니다. 체크포인트에서 다시 시작할 수 있습니다.'
       };
 
-      // 조사 세션 종료
+      // 엔딩 도달 시 조사 세션 종료
       await prisma.$executeRaw`
         UPDATE investigation_sessions 
-        SET status = 'completed', ended_at = CURRENT_TIMESTAMP
+        SET status = 'completed', ended_at = CURRENT_TIMESTAMP, hp = 0, energy = 0
         WHERE user_id = ${userId} AND status = 'active'
       `;
+
+      // 체력도 0으로 (조사 종료 표시)
+      delta.sessionEnded = true;
+      delta.endReason = 'ending';
     }
 
     // 체크포인트 노드에 도착: 자동 저장
@@ -502,11 +588,26 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       };
     }
 
+    // 최신 세션 정보 조회 (엔딩/조사종료 후에는 completed 상태일 수 있음)
+    const updatedSession = await prisma.$queryRaw<any[]>`
+      SELECT hp, energy, gold_start FROM investigation_sessions 
+      WHERE user_id = ${userId}
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+
+    const sessionInfo = updatedSession.length > 0 ? {
+      hp: updatedSession[0].hp,
+      energy: updatedSession[0].energy,
+      gold: updatedSession[0].gold_start
+    } : null;
+
       return res.status(200).json({
       success: true,
       delta,
       nodeId: nextNode ? nextNode.node_id : null,
-      nextNode: nextNodeData
+      nextNode: nextNodeData,
+      session: sessionInfo
     });
 
   } catch (error) {

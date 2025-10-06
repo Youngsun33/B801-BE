@@ -65,12 +65,14 @@ export const startInvestigation = async (req: Request, res: Response) => {
       });
     }
 
-    // 5. 새로운 조사 세션 시작
+    // 5. 새로운 조사 세션 시작 (항상 노드 1부터)
     await prisma.$executeRaw`
       INSERT INTO investigation_sessions 
-      (user_id, day, session_number, hp, energy, gold_start, status)
-      VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 'active')
+      (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
+      VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
+    
+    console.log('새 조사 세션 시작 - 노드 1부터');
 
     // 6. 조사 횟수 증가
     await prisma.$executeRaw`
@@ -304,7 +306,7 @@ export const enterStoryDay = async (req: Request, res: Response) => {
       });
     }
 
-    // 활성 세션이 있는지 확인
+    // 활성 세션이 있으면 종료하고 새로 시작
     const activeSessions = await prisma.$queryRaw<any[]>`
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
@@ -313,28 +315,22 @@ export const enterStoryDay = async (req: Request, res: Response) => {
     `;
 
     if (activeSessions.length > 0) {
-      // 기존 활성 세션 반환
-      return res.json({
-        message: '진행 중인 조사가 있습니다.',
-        session: activeSessions[0],
-        actionPointsRemaining: 3 - investigationCount,
-        progress: {
-          current_chapter: currentDay,
-          last_node_id: activeSessions[0].current_node_id || 1,
-          investigation_count: investigationCount
-        },
-        startNode: {
-          nodeId: activeSessions[0].current_node_id || 1
-        }
-      });
+      console.log('기존 활성 세션 종료하고 새로 시작');
+      await prisma.$executeRaw`
+        UPDATE investigation_sessions 
+        SET status = 'completed', ended_at = CURRENT_TIMESTAMP
+        WHERE id = ${activeSessions[0].id}
+      `;
     }
 
-    // 새로운 조사 세션 시작
+    // 새로운 조사 세션 시작 (항상 노드 1부터)
     await prisma.$executeRaw`
       INSERT INTO investigation_sessions 
       (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
       VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
+    
+    console.log('새 조사 세션 시작 - 노드 1부터');
 
     // 조사 횟수 증가
     await prisma.$executeRaw`
