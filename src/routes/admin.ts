@@ -14,6 +14,7 @@ import {
   addUserAbility,
   deleteUserAbility,
   deleteUserCheckpoint,
+  updateInvestigationCount,
   upload 
 } from '../controllers/adminController';
 import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
@@ -54,6 +55,9 @@ router.delete('/users/abilities/:abilityId', deleteUserAbility);
 
 // DELETE /api/admin/users/checkpoints/:checkpointId - 유저 체크포인트 삭제
 router.delete('/users/checkpoints/:checkpointId', deleteUserCheckpoint);
+
+// PUT /api/admin/users/:userId/investigation-count - 유저 조사 기회 수정
+router.put('/users/:userId/investigation-count', updateInvestigationCount);
 
 // Twine 파일 임포트
 // POST /api/admin/import-twine

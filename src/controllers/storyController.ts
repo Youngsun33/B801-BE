@@ -528,6 +528,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
             checkpointDesc = checkpointInfo[0].description || checkpointDesc;
           }
 
+          // 체크포인트는 노드 위치만 저장 (HP, 에너지, 골드는 저장하지 않음)
           await prisma.$executeRaw`
             INSERT INTO user_checkpoints (user_id, node_id, title, description, hp, energy, gold)
             VALUES (
@@ -535,9 +536,9 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
               ${nextNode.node_id}, 
               ${checkpointTitle},
               ${checkpointDesc},
-              ${user.hp},
-              ${user.energy},
-              ${user.gold}
+              0,
+              0,
+              0
             )
           `;
 

@@ -432,26 +432,71 @@ export const deleteUserCheckpoint = async (req: Request, res: Response) => {
   }
 };
 
+// 유저 조사 기회 수정
+export const updateInvestigationCount = async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const { day, count } = req.body;
+
+    // 해당 날짜의 조사 카운트 조회
+    const existing = await prisma.dailyInvestigationCount.findFirst({
+      where: {
+        user_id: userId,
+        day: day
+      }
+    });
+
+    if (existing) {
+      // 기존 레코드 업데이트
+      await prisma.dailyInvestigationCount.update({
+        where: { id: existing.id },
+        data: { count: count }
+      });
+    } else {
+      // 새로 생성
+      await prisma.dailyInvestigationCount.create({
+        data: {
+          user_id: userId,
+          day: day,
+          count: count
+        }
+      });
+    }
+
+    return res.status(200).json({ 
+      message: '조사 기회가 수정되었습니다.',
+      count: count 
+    });
+  } catch (error) {
+    console.error('조사 기회 수정 오류:', error);
+    return res.status(500).json({ error: '조사 기회를 수정하는 중 오류가 발생했습니다.' });
+  }
+};
+
 // 관리자 통계 조회
 export const getAdminStats = async (req: Request, res: Response) => {
   try {
     const userCount = await prisma.user.count();
     
-    // 새 ERD 구조에서 노드 카운트
-    const storyNodeResult = await prisma.$queryRaw<any[]>`
-      SELECT COUNT(*) as count FROM nodes
-    `;
-    const storyNodeCount = storyNodeResult[0]?.count || 0;
+    // 메인 스토리 노드 카운트
+    const mainStoryCount = await prisma.mainStory.count();
     
-    // 현재는 last_login 필드가 없으므로 전체 사용자 수를 활성 사용자로 간주
-    const activeUsers = userCount;
+    // 활성 유저 카운트 (살아있는 유저)
+    const activeUsers = await prisma.user.count({
+      where: { is_alive: true }
+    });
+
+    // 완료된 조사 세션 수
+    const completedSessions = await prisma.investigationSession.count({
+      where: { status: 'completed' }
+    });
 
     return res.status(200).json({
       stats: {
         totalUsers: userCount,
         activeUsers: activeUsers,
-        storyNodes: storyNodeCount,
-        completedPlays: 0 // TODO: 실제 완료된 플레이 수 계산
+        storyNodes: mainStoryCount,
+        completedPlays: completedSessions
       }
     });
 
