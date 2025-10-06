@@ -78,5 +78,5 @@ jobs:
             PORT=8080
             JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }}
             JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
-            DATABASE_URL=file:./dev.db
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
           

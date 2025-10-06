@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -21,6 +21,7 @@ model User {
   daily_investigation_count DailyInvestigationCount[]
   inventory                 Inventory[]
   investigation_sessions    InvestigationSession[]
+  story_progress            StoryProgress[]
   team_members              TeamMember[]
   user_abilities            UserAbility[]
   user_checkpoints          UserCheckpoint[]
@@ -28,7 +29,6 @@ model User {
   user_save_states          UserSaveState[]
   user_story_abilities      UserStoryAbility[]
   user_story_items          UserStoryItem[]
-  story_progress            StoryProgress[]
 
   @@map("users")
 }
@@ -295,6 +295,120 @@ model DailyInvestigationCount {
   @@map("daily_investigation_count")
 }
 
+model StoryAbility {
+  id                   Int                @id @default(autoincrement())
+  name                 String
+  description          String
+  user_story_abilities UserStoryAbility[]
+
+  @@map("story_abilities")
+}
+
+model UserStoryAbility {
+  id               Int          @id @default(autoincrement())
+  user_id          Int
+  story_ability_id Int
+  quantity         Int          @default(1)
+  obtained_at      DateTime     @default(now())
+  story_ability    StoryAbility @relation(fields: [story_ability_id], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_story_abilities")
+}
+
+model StoryItem {
+  id               Int             @id @default(autoincrement())
+  name             String
+  description      String?
+  created_at       DateTime        @default(now())
+  user_story_items UserStoryItem[]
+
+  @@map("story_items")
+}
+
+model UserStoryItem {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  story_item_id Int
+  quantity      Int       @default(1)
+  obtained_at   DateTime  @default(now())
+  story_item    StoryItem @relation(fields: [story_item_id], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_story_items")
+}
+
+model RandomStory {
+  id           Int     @id @default(autoincrement())
+  title        String
+  description  String
+  choices      String
+  outcomes     String
+  requirements String?
+  category     String?
+
+  @@map("random_stories")
+}
+
+model MainStory {
+  id            Int           @id @default(autoincrement())
+  node_id       Int           @unique
+  title         String
+  text          String
+  node_type     String
+  route_name    String?
+  choices       String
+  rewards       String?
+  position_x    Int?
+  position_y    Int?
+  image_url     String?
+  image_alt     String?
+  created_at    DateTime      @default(now())
+  story_choices StoryChoice[]
+
+  @@map("main_stories")
+}
+
+model StoryChoice {
+  id                  Int                 @id @default(autoincrement())
+  story_node_id       Int
+  choice_text         String
+  target_node_id      Int?
+  order_index         Int                 @default(0)
+  is_available        Boolean             @default(true)
+  created_at          DateTime            @default(now())
+  choice_requirements ChoiceRequirement[]
+  story_node          MainStory           @relation(fields: [story_node_id], references: [node_id], onDelete: Cascade)
+
+  @@map("story_choices")
+}
+
+model ChoiceRequirement {
+  id                Int         @id @default(autoincrement())
+  choice_id         Int
+  requirement_type  String
+  requirement_id    Int?
+  requirement_value Int?
+  operator          String      @default(">=")
+  description       String?
+  created_at        DateTime    @default(now())
+  choice            StoryChoice @relation(fields: [choice_id], references: [id], onDelete: Cascade)
+
+  @@map("choice_requirements")
+}
+
+model StoryProgress {
+  id              Int      @id @default(autoincrement())
+  user_id         Int
+  current_node_id Int      @default(1)
+  story_data      String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now())
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("story_progress")
+}
+
 enum ItemType {
   story
   raid
@@ -304,136 +418,4 @@ enum RaidStatus {
   ongoing
   cleared
   failed
-}
-
-// 스토리 관련 모델들
-model StoryAbility {
-  id              Int                  @id @default(autoincrement())
-  name            String
-  description     String
-  
-  user_story_abilities  UserStoryAbility[]
-
-  @@map("story_abilities")
-}
-
-model UserStoryAbility {
-  id               Int      @id @default(autoincrement())
-  user_id          Int
-  story_ability_id Int
-  quantity         Int      @default(1)
-  obtained_at      DateTime @default(now())
-
-  user          User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  story_ability StoryAbility @relation(fields: [story_ability_id], references: [id], onDelete: Cascade)
-
-  @@map("user_story_abilities")
-}
-
-model StoryItem {
-  id               Int      @id @default(autoincrement())
-  name             String
-  description      String?
-  created_at       DateTime @default(now())
-
-  user_story_items UserStoryItem[]
-
-  @@map("story_items")
-}
-
-model UserStoryItem {
-  id             Int      @id @default(autoincrement())
-  user_id        Int
-  story_item_id  Int
-  quantity       Int      @default(1)
-  obtained_at    DateTime @default(now())
-
-  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  story_item StoryItem  @relation(fields: [story_item_id], references: [id], onDelete: Cascade)
-
-  @@map("user_story_items")
-}
-
-model RandomStory {
-  id              Int      @id @default(autoincrement())
-  title           String
-  description     String
-  choices         String   // JSON array of choices
-  outcomes        String   // JSON array of outcomes with conditions and rewards
-  requirements    String?  // JSON object for requirements (skills, items, etc.)
-  category        String?  // 분류 (encounter, location, event, etc.)
-  
-  @@map("random_stories")
-}
-
-model MainStory {
-  id              Int      @id @default(autoincrement())
-  node_id         Int      @unique
-  title           String
-  text            String
-  node_type       String   // 'main', 'checkpoint'
-  route_name      String?  // '루트 1', '루트 2', etc.
-  choices         String   // JSON array of choices (기존 호환성 유지)
-  rewards         String?  // JSON object of rewards
-  position_x      Int?     // Twine 에디터 X 좌표
-  position_y      Int?     // Twine 에디터 Y 좌표
-  image_url       String?  // 노드 이미지 URL
-  image_alt       String?  // 이미지 alt 텍스트
-  created_at      DateTime @default(now())
-
-  // 새로운 관계들
-  story_choices   StoryChoice[]
-
-  @@map("main_stories")
-}
-
-// 스토리 선택지 테이블
-model StoryChoice {
-  id              Int      @id @default(autoincrement())
-  story_node_id   Int      // MainStory의 node_id 참조
-  choice_text     String   // 선택지 텍스트
-  target_node_id  Int?     // 다음 노드 ID
-  order_index     Int      @default(0) // 선택지 순서
-  is_available    Boolean  @default(true) // 선택 가능 여부
-  
-  created_at      DateTime @default(now())
-
-  // 관계
-  story_node      MainStory @relation(fields: [story_node_id], references: [node_id], onDelete: Cascade)
-  
-  // 요구사항들
-  choice_requirements ChoiceRequirement[]
-
-  @@map("story_choices")
-}
-
-// 선택지 요구사항 테이블 (능력, 아이템 등)
-model ChoiceRequirement {
-  id              Int      @id @default(autoincrement())
-  choice_id       Int      // StoryChoice 참조
-  requirement_type String  // 'ability', 'item', 'stat', 'condition'
-  requirement_id  Int?     // 능력 ID, 아이템 ID 등 (null이면 직접 값)
-  requirement_value Int?   // 필요 수치 (능력 레벨, 아이템 개수 등)
-  operator        String   @default(">=") // '>=', '<=', '==', '>' 등
-  description     String?  // 요구사항 설명
-  
-  created_at      DateTime @default(now())
-
-  // 관계
-  choice          StoryChoice @relation(fields: [choice_id], references: [id], onDelete: Cascade)
-
-  @@map("choice_requirements")
-}
-
-model StoryProgress {
-  id              Int      @id @default(autoincrement())
-  user_id         Int
-  current_node_id Int      @default(1) // 현재 진행 중인 노드 ID
-  story_data      String?  // JSON string for additional story state
-  created_at      DateTime @default(now())
-  updated_at      DateTime @default(now())
-
-  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@map("story_progress")
 }
