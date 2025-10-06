@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const adminController_1 = require("../controllers/adminController");
+const uploadController_1 = require("../controllers/uploadController");
+const auth_1 = require("../middleware/auth");
+const admin_1 = require("../middleware/admin");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticateAccessToken);
+router.use(admin_1.requireAdmin);
+router.get('/stats', adminController_1.getAdminStats);
+router.post('/import-twine', adminController_1.upload.single('twineFile'), adminController_1.importTwineFile);
+router.get('/story-nodes', adminController_1.getStoryNodes);
+router.post('/story-nodes', adminController_1.createStoryNode);
+router.put('/story-nodes/:nodeId', adminController_1.updateStoryNode);
+router.delete('/story-nodes/:nodeId', adminController_1.deleteStoryNode);
+router.post('/upload/image', uploadController_1.uploadSingle, uploadController_1.uploadImage);
+router.delete('/upload/image/:filename', uploadController_1.deleteImage);
+exports.default = router;
+//# sourceMappingURL=admin.js.map

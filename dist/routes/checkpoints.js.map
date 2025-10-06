@@ -1,0 +1,1 @@
+{"version":3,"file":"checkpoints.js","sourceRoot":"","sources":["../../src/routes/checkpoints.ts"],"names":[],"mappings":";;AAAA,qCAAiC;AACjC,6CAA6D;AAC7D,8EAAyF;AAEzF,MAAM,MAAM,GAAG,IAAA,gBAAM,GAAE,CAAC;AAExB,MAAM,CAAC,GAAG,CAAC,GAAG,EAAE,8BAAuB,EAAE,yCAAkB,CAAC,CAAC;AAC7D,MAAM,CAAC,IAAI,CAAC,OAAO,EAAE,8BAAuB,EAAE,qCAAc,CAAC,CAAC;AAE9D,kBAAe,MAAM,CAAC"}

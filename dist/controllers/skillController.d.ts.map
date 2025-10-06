@@ -1,0 +1,1 @@
+{"version":3,"file":"skillController.d.ts","sourceRoot":"","sources":["../../src/controllers/skillController.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AA0B5C,eAAO,MAAM,eAAe,GAAU,KAAK,OAAO,EAAE,KAAK,QAAQ,gDA6DhE,CAAC;AAEF,eAAO,MAAM,OAAO,GAAU,KAAK,OAAO,EAAE,KAAK,QAAQ,gDAkFxD,CAAC;AAEF,eAAO,MAAM,UAAU,GAAU,KAAK,OAAO,EAAE,KAAK,QAAQ,gDAkF3D,CAAC"}

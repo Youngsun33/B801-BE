@@ -448,11 +448,7 @@ async function main() {
     update: {},
     create: {
       user_id: testUser.id,
-      current_chapter: 1,
-      last_node_id: 1001,
-      investigation_count: 3,
-      checkpoint_count: 0,
-      story_type: 'checkpoint'
+      current_node_id: 1001
     }
   });
 
