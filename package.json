@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/app.js",
   "scripts": {
-    "start": "node -e \"try { require('child_process').execSync('npx prisma generate', {stdio: 'ignore'}); } catch(e) { console.log('Prisma already generated'); }\" && node dist/app.js",
+    "start": "node dist/app.js",
     "dev": "nodemon --watch src --exec ts-node src/app.ts",
     "build": "tsc",
     "db:reset": "ts-node src/scripts/resetDatabase.ts",

@@ -31,6 +31,13 @@ import investigationRoutes from './routes/investigation';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+console.log('🚀 애플리케이션 시작 중...');
+console.log('📊 환경 정보:');
+console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`  - PORT: ${PORT}`);
+console.log(`  - DATABASE_URL 설정됨: ${process.env.DATABASE_URL ? 'YES' : 'NO'}`);
+console.log(`  - JWT_ACCESS_SECRET 설정됨: ${process.env.JWT_ACCESS_SECRET ? 'YES' : 'NO'}`);
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -96,6 +103,8 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+  console.log(`✅ 애플리케이션이 성공적으로 시작되었습니다!`);
 });
 
 export default app;

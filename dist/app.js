@@ -30,6 +30,12 @@ const mainStory_1 = __importDefault(require("./routes/mainStory"));
 const investigation_1 = __importDefault(require("./routes/investigation"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
+console.log('🚀 애플리케이션 시작 중...');
+console.log('📊 환경 정보:');
+console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`  - PORT: ${PORT}`);
+console.log(`  - DATABASE_URL 설정됨: ${process.env.DATABASE_URL ? 'YES' : 'NO'}`);
+console.log(`  - JWT_ACCESS_SECRET 설정됨: ${process.env.JWT_ACCESS_SECRET ? 'YES' : 'NO'}`);
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
     origin: process.env.NODE_ENV === 'production'
@@ -83,6 +89,8 @@ app.use((req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+    console.log(`✅ 애플리케이션이 성공적으로 시작되었습니다!`);
 });
 exports.default = app;
 //# sourceMappingURL=app.js.map
