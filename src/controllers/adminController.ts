@@ -178,39 +178,11 @@ export const getAllUsers = async (req: Request, res: Response) => {
             id: true,
             node_id: true,
             title: true,
-            hp: true,
-            energy: true,
-            gold: true,
+            description: true,
             saved_at: true
           },
           orderBy: {
             saved_at: 'desc'
-          }
-        },
-        inventory: {
-          select: {
-            id: true,
-            item: {
-              select: {
-                id: true,
-                name: true,
-                description: true
-              }
-            },
-            quantity: true
-          }
-        },
-        user_story_abilities: {
-          select: {
-            id: true,
-            story_ability: {
-              select: {
-                id: true,
-                name: true,
-                description: true
-              }
-            },
-            quantity: true
           }
         }
       },
@@ -219,7 +191,50 @@ export const getAllUsers = async (req: Request, res: Response) => {
       }
     });
 
-    return res.status(200).json({ users });
+    // 각 유저의 아이템과 능력을 user_resources에서 조회
+    const usersWithResources = await Promise.all(
+      users.map(async (user: any) => {
+        // 아이템 (ITEM 타입 리소스)
+        const items = await prisma.$queryRaw<any[]>`
+          SELECT ur.id, ur.quantity, r.id as resource_id, r.name, r.description
+          FROM user_resources ur
+          JOIN resources r ON ur.resource_id = r.id
+          WHERE ur.user_id = ${user.id} AND r.type = 'ITEM'
+        `;
+
+        // 능력 (SKILL 타입 리소스)
+        const abilities = await prisma.$queryRaw<any[]>`
+          SELECT ur.id, ur.quantity, r.id as resource_id, r.name, r.description
+          FROM user_resources ur
+          JOIN resources r ON ur.resource_id = r.id
+          WHERE ur.user_id = ${user.id} AND r.type = 'SKILL'
+        `;
+
+        return {
+          ...user,
+          user_story_items: items.map((item: any) => ({
+            id: item.id,
+            quantity: item.quantity,
+            story_item: {
+              id: item.resource_id,
+              name: item.name,
+              description: item.description
+            }
+          })),
+          user_story_abilities: abilities.map((ability: any) => ({
+            id: ability.id,
+            quantity: ability.quantity,
+            story_ability: {
+              id: ability.resource_id,
+              name: ability.name,
+              description: ability.description
+            }
+          }))
+        };
+      })
+    );
+
+    return res.status(200).json({ users: usersWithResources });
   } catch (error) {
     console.error('유저 목록 조회 오류:', error);
     return res.status(500).json({ error: '유저 목록을 불러오는 중 오류가 발생했습니다.' });
@@ -240,26 +255,6 @@ export const getUserDetail = async (req: Request, res: Response) => {
             saved_at: 'desc'
           }
         },
-        inventory: {
-          include: {
-            item: true
-          }
-        },
-        user_story_abilities: {
-          include: {
-            story_ability: true
-          }
-        },
-        user_story_items: {
-          include: {
-            story_item: true
-          }
-        },
-        user_resources: {
-          include: {
-            resource: true
-          }
-        },
         story_progress: true
       }
     });
@@ -268,7 +263,57 @@ export const getUserDetail = async (req: Request, res: Response) => {
       return res.status(404).json({ error: '유저를 찾을 수 없습니다.' });
     }
 
-    return res.status(200).json({ user });
+    // user_resources에서 아이템과 능력 조회
+    const items = await prisma.$queryRaw<any[]>`
+      SELECT ur.id, ur.quantity, ur.obtained_at, r.id as resource_id, r.name, r.description
+      FROM user_resources ur
+      JOIN resources r ON ur.resource_id = r.id
+      WHERE ur.user_id = ${userId} AND r.type = 'ITEM'
+      ORDER BY r.name
+    `;
+
+    const abilities = await prisma.$queryRaw<any[]>`
+      SELECT ur.id, ur.quantity, ur.obtained_at, r.id as resource_id, r.name, r.description
+      FROM user_resources ur
+      JOIN resources r ON ur.resource_id = r.id
+      WHERE ur.user_id = ${userId} AND r.type = 'SKILL'
+      ORDER BY r.name
+    `;
+
+    // Inventory 아이템도 조회 (Item 테이블)
+    const inventory = await prisma.inventory.findMany({
+      where: { user_id: userId },
+      include: {
+        item: true
+      }
+    });
+
+    const userWithResources = {
+      ...user,
+      user_story_items: items.map((item: any) => ({
+        id: item.id,
+        quantity: item.quantity,
+        obtained_at: item.obtained_at,
+        story_item: {
+          id: item.resource_id,
+          name: item.name,
+          description: item.description
+        }
+      })),
+      user_story_abilities: abilities.map((ability: any) => ({
+        id: ability.id,
+        quantity: ability.quantity,
+        obtained_at: ability.obtained_at,
+        story_ability: {
+          id: ability.resource_id,
+          name: ability.name,
+          description: ability.description
+        }
+      })),
+      inventory: inventory
+    };
+
+    return res.status(200).json({ user: userWithResources });
   } catch (error) {
     console.error('유저 상세 조회 오류:', error);
     return res.status(500).json({ error: '유저 정보를 불러오는 중 오류가 발생했습니다.' });
@@ -304,39 +349,39 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-// 유저 아이템 추가
+// 유저 아이템 추가 (user_resources 사용)
 export const addUserItem = async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.userId);
-    const { item_id, quantity } = req.body;
+    const { resource_id, quantity } = req.body;
 
-    // 기존 아이템이 있는지 확인
-    const existingItem = await prisma.inventory.findFirst({
+    // 기존 리소스가 있는지 확인
+    const existingResource = await prisma.userResource.findFirst({
       where: {
         user_id: userId,
-        item_id: item_id
+        resource_id: resource_id
       }
     });
 
-    if (existingItem) {
+    if (existingResource) {
       // 수량 증가
-      const updated = await prisma.inventory.update({
-        where: { id: existingItem.id },
+      const updated = await prisma.userResource.update({
+        where: { id: existingResource.id },
         data: {
-          quantity: existingItem.quantity + quantity
+          quantity: existingResource.quantity + quantity
         }
       });
-      return res.status(200).json({ message: '아이템 수량이 증가되었습니다.', inventory: updated });
+      return res.status(200).json({ message: '아이템 수량이 증가되었습니다.', resource: updated });
     } else {
       // 새로 추가
-      const newItem = await prisma.inventory.create({
+      const newResource = await prisma.userResource.create({
         data: {
           user_id: userId,
-          item_id: item_id,
+          resource_id: resource_id,
           quantity: quantity
         }
       });
-      return res.status(201).json({ message: '아이템이 추가되었습니다.', inventory: newItem });
+      return res.status(201).json({ message: '아이템이 추가되었습니다.', resource: newResource });
     }
   } catch (error) {
     console.error('아이템 추가 오류:', error);
@@ -344,13 +389,13 @@ export const addUserItem = async (req: Request, res: Response) => {
   }
 };
 
-// 유저 아이템 삭제
+// 유저 아이템 삭제 (user_resources 사용)
 export const deleteUserItem = async (req: Request, res: Response) => {
   try {
-    const inventoryId = parseInt(req.params.inventoryId);
+    const resourceId = parseInt(req.params.resourceId);
 
-    await prisma.inventory.delete({
-      where: { id: inventoryId }
+    await prisma.userResource.delete({
+      where: { id: resourceId }
     });
 
     return res.status(200).json({ message: '아이템이 삭제되었습니다.' });
@@ -360,39 +405,39 @@ export const deleteUserItem = async (req: Request, res: Response) => {
   }
 };
 
-// 유저 능력 추가
+// 유저 능력 추가 (user_resources 사용)
 export const addUserAbility = async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.userId);
-    const { story_ability_id, quantity } = req.body;
+    const { resource_id, quantity } = req.body;
 
-    // 기존 능력이 있는지 확인
-    const existingAbility = await prisma.userStoryAbility.findFirst({
+    // 기존 리소스가 있는지 확인
+    const existingResource = await prisma.userResource.findFirst({
       where: {
         user_id: userId,
-        story_ability_id: story_ability_id
+        resource_id: resource_id
       }
     });
 
-    if (existingAbility) {
+    if (existingResource) {
       // 수량 증가
-      const updated = await prisma.userStoryAbility.update({
-        where: { id: existingAbility.id },
+      const updated = await prisma.userResource.update({
+        where: { id: existingResource.id },
         data: {
-          quantity: existingAbility.quantity + quantity
+          quantity: existingResource.quantity + quantity
         }
       });
-      return res.status(200).json({ message: '능력 레벨이 증가되었습니다.', ability: updated });
+      return res.status(200).json({ message: '능력 레벨이 증가되었습니다.', resource: updated });
     } else {
       // 새로 추가
-      const newAbility = await prisma.userStoryAbility.create({
+      const newResource = await prisma.userResource.create({
         data: {
           user_id: userId,
-          story_ability_id: story_ability_id,
+          resource_id: resource_id,
           quantity: quantity
         }
       });
-      return res.status(201).json({ message: '능력이 추가되었습니다.', ability: newAbility });
+      return res.status(201).json({ message: '능력이 추가되었습니다.', resource: newResource });
     }
   } catch (error) {
     console.error('능력 추가 오류:', error);
@@ -400,13 +445,13 @@ export const addUserAbility = async (req: Request, res: Response) => {
   }
 };
 
-// 유저 능력 삭제
+// 유저 능력 삭제 (user_resources 사용)
 export const deleteUserAbility = async (req: Request, res: Response) => {
   try {
-    const abilityId = parseInt(req.params.abilityId);
+    const resourceId = parseInt(req.params.resourceId);
 
-    await prisma.userStoryAbility.delete({
-      where: { id: abilityId }
+    await prisma.userResource.delete({
+      where: { id: resourceId }
     });
 
     return res.status(200).json({ message: '능력이 삭제되었습니다.' });
@@ -429,6 +474,34 @@ export const deleteUserCheckpoint = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('체크포인트 삭제 오류:', error);
     return res.status(500).json({ error: '체크포인트를 삭제하는 중 오류가 발생했습니다.' });
+  }
+};
+
+// 모든 리소스 목록 조회 (아이템 + 능력)
+export const getAllResources = async (req: Request, res: Response) => {
+  try {
+    const { type } = req.query;
+
+    let resources;
+    if (type === 'ITEM') {
+      resources = await prisma.$queryRaw<any[]>`
+        SELECT * FROM resources WHERE type = 'ITEM' ORDER BY name
+      `;
+    } else if (type === 'SKILL') {
+      resources = await prisma.$queryRaw<any[]>`
+        SELECT * FROM resources WHERE type = 'SKILL' ORDER BY name
+      `;
+    } else {
+      // 모든 리소스
+      resources = await prisma.$queryRaw<any[]>`
+        SELECT * FROM resources ORDER BY type, name
+      `;
+    }
+
+    return res.status(200).json({ resources });
+  } catch (error) {
+    console.error('리소스 목록 조회 오류:', error);
+    return res.status(500).json({ error: '리소스 목록을 불러오는 중 오류가 발생했습니다.' });
   }
 };
 

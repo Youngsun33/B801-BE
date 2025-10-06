@@ -15,6 +15,7 @@ import {
   deleteUserAbility,
   deleteUserCheckpoint,
   updateInvestigationCount,
+  getAllResources,
   upload 
 } from '../controllers/adminController';
 import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
@@ -44,20 +45,23 @@ router.put('/users/:userId', updateUser);
 // POST /api/admin/users/:userId/items - 유저 아이템 추가
 router.post('/users/:userId/items', addUserItem);
 
-// DELETE /api/admin/users/items/:inventoryId - 유저 아이템 삭제
-router.delete('/users/items/:inventoryId', deleteUserItem);
+// DELETE /api/admin/users/resources/:resourceId - 유저 아이템 삭제
+router.delete('/users/resources/:resourceId', deleteUserItem);
 
 // POST /api/admin/users/:userId/abilities - 유저 능력 추가
 router.post('/users/:userId/abilities', addUserAbility);
 
-// DELETE /api/admin/users/abilities/:abilityId - 유저 능력 삭제
-router.delete('/users/abilities/:abilityId', deleteUserAbility);
+// DELETE /api/admin/users/resources/:resourceId - 유저 능력 삭제
+router.delete('/users/resources/:resourceId', deleteUserAbility);
 
 // DELETE /api/admin/users/checkpoints/:checkpointId - 유저 체크포인트 삭제
 router.delete('/users/checkpoints/:checkpointId', deleteUserCheckpoint);
 
 // PUT /api/admin/users/:userId/investigation-count - 유저 조사 기회 수정
 router.put('/users/:userId/investigation-count', updateInvestigationCount);
+
+// GET /api/admin/resources - 모든 리소스 목록 (아이템 + 능력)
+router.get('/resources', getAllResources);
 
 // Twine 파일 임포트
 // POST /api/admin/import-twine
