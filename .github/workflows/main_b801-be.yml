@@ -26,6 +26,7 @@ jobs:
       - name: npm install, build, and test
         run: |
           npm install
+          npx prisma generate
           npm run build --if-present
           npm run test --if-present
 
@@ -47,6 +48,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+      
+      - name: Generate Prisma Client
+        run: |
+          npm install
+          npx prisma generate
       
       - name: Login to Azure
         uses: azure/login@v2

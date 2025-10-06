@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/app.js",
   "scripts": {
-    "start": "prisma generate && node dist/app.js",
+    "start": "npx prisma generate && node dist/app.js",
     "dev": "nodemon --watch src --exec ts-node src/app.ts",
     "build": "tsc",
     "db:reset": "ts-node src/scripts/resetDatabase.ts",
@@ -11,7 +11,7 @@
     "db:seed": "ts-node src/lib/seed.ts",
     "db:seed-isPick": "ts-node src/lib/seedIsPick.ts",
     "create-user": "ts-node src/lib/createUser.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "npx prisma generate"
   },
   "keywords": [],
   "author": "",
