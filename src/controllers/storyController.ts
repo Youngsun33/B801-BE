@@ -76,7 +76,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
           ORDER BY ur.id DESC
           LIMIT 2
         `;
-        console.log('   → DB에서 최근 능력:', userAbilities.map(a => a.name));
+        console.log('   → DB에서 최근 능력:', userAbilities.map((a: any) => a.name));
       }
 
       if (userAbilities.length > 0) {
@@ -106,7 +106,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
 
     // 각 선택지의 제약조건 조회
     const choicesWithConstraints = await Promise.all(
-      choices.map(async (choice) => {
+      choices.map(async (choice: any) => {
         const constraints = await prisma.$queryRaw<any[]>`
           SELECT cc.*, r.name as resource_name, r.type as resource_type
           FROM choice_constraints cc
@@ -119,7 +119,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
           targetNodeId: choice.target_node_number,
           label: choice.choice_text,
           available: choice.is_available,
-          requirements: constraints.map(c => ({
+          requirements: constraints.map((c: any) => ({
             type: c.resource_type,
             name: c.resource_name,
             value: c.required_value,
@@ -290,6 +290,13 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
               WHERE user_id = ${userId} AND status = 'active'
             `;
             
+            // users 테이블에도 HP 실시간 반영
+            await prisma.$executeRaw`
+              UPDATE users 
+              SET hp = ${newHp}
+              WHERE id = ${userId}
+            `;
+            
             delta.hp = result.value_change;
             console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
             
@@ -320,6 +327,13 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
               UPDATE investigation_sessions 
               SET energy = ${newEnergy}
               WHERE user_id = ${userId} AND status = 'active'
+            `;
+            
+            // users 테이블에도 에너지 실시간 반영
+            await prisma.$executeRaw`
+              UPDATE users 
+              SET energy = ${newEnergy}
+              WHERE id = ${userId}
             `;
             
             delta.energy = result.value_change;
@@ -572,7 +586,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         ORDER BY c.order_num ASC
       `;
 
-      const nextChoicesFormatted = nextChoices.map(c => ({
+      const nextChoicesFormatted = nextChoices.map((c: any) => ({
         id: c.id,
         targetNodeId: c.target_node_number,
         label: c.choice_text,

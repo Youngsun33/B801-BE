@@ -22,7 +22,7 @@ export const getUserStoryAbilities = async (req: Request, res: Response) => {
     `;
 
     // 프론트엔드 형식에 맞게 변환
-    const storyAbilities = abilities.map(a => ({
+    const storyAbilities = abilities.map((a: any) => ({
       userStoryAbilityId: a.id,
       quantity: a.quantity,
       obtainedAt: a.obtained_at,

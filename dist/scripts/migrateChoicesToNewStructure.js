@@ -1,11 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = require("../lib/prisma");
 async function migrateChoicesToNewStructure() {
     console.log('🔄 기존 choices 데이터를 새로운 구조로 마이그레이션 시작...');
     try {
-        const mainStories = await prisma.mainStory.findMany({
+        const mainStories = await prisma_1.prisma.mainStory.findMany({
             orderBy: { node_id: 'asc' }
         });
         console.log(`📊 총 ${mainStories.length}개의 스토리 노드를 처리합니다.`);
@@ -18,7 +17,7 @@ async function migrateChoicesToNewStructure() {
                     continue;
                 }
                 console.log(`  📝 ${choices.length}개의 선택지를 처리합니다.`);
-                await prisma.storyChoice.deleteMany({
+                await prisma_1.prisma.storyChoice.deleteMany({
                     where: { story_node_id: story.node_id }
                 });
                 for (let i = 0; i < choices.length; i++) {
@@ -36,7 +35,7 @@ async function migrateChoicesToNewStructure() {
                         console.log(`    ⚠️ 선택지 ${i + 1}의 텍스트가 비어있습니다.`);
                         continue;
                     }
-                    const storyChoice = await prisma.storyChoice.create({
+                    const storyChoice = await prisma_1.prisma.storyChoice.create({
                         data: {
                             story_node_id: story.node_id,
                             choice_text: choiceText,
@@ -51,7 +50,7 @@ async function migrateChoicesToNewStructure() {
                         if (typeof choice.requirements === 'object' && !Array.isArray(choice.requirements)) {
                             for (const [reqType, reqValue] of Object.entries(choice.requirements)) {
                                 if (reqValue && typeof reqValue === 'number' && reqValue > 0) {
-                                    await prisma.choiceRequirement.create({
+                                    await prisma_1.prisma.choiceRequirement.create({
                                         data: {
                                             choice_id: storyChoice.id,
                                             requirement_type: reqType,
@@ -73,8 +72,8 @@ async function migrateChoicesToNewStructure() {
             }
         }
         console.log('\n✅ 마이그레이션 완료!');
-        const totalChoices = await prisma.storyChoice.count();
-        const totalRequirements = await prisma.choiceRequirement.count();
+        const totalChoices = await prisma_1.prisma.storyChoice.count();
+        const totalRequirements = await prisma_1.prisma.choiceRequirement.count();
         console.log(`📊 마이그레이션 결과:`);
         console.log(`  - 총 선택지: ${totalChoices}개`);
         console.log(`  - 총 요구사항: ${totalRequirements}개`);
@@ -83,7 +82,7 @@ async function migrateChoicesToNewStructure() {
         console.error('❌ 마이그레이션 실패:', error);
     }
     finally {
-        await prisma.$disconnect();
+        await prisma_1.prisma.$disconnect();
     }
 }
 if (require.main === module) {

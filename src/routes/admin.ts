@@ -6,6 +6,14 @@ import {
   deleteStoryNode, 
   createStoryNode,
   getAdminStats,
+  getAllUsers,
+  getUserDetail,
+  updateUser,
+  addUserItem,
+  deleteUserItem,
+  addUserAbility,
+  deleteUserAbility,
+  deleteUserCheckpoint,
   upload 
 } from '../controllers/adminController';
 import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
@@ -21,6 +29,31 @@ router.use(requireAdmin);
 // 관리자 통계
 // GET /api/admin/stats
 router.get('/stats', getAdminStats);
+
+// ===== 유저 관리 라우트 =====
+// GET /api/admin/users - 모든 유저 목록
+router.get('/users', getAllUsers);
+
+// GET /api/admin/users/:userId - 특정 유저 상세 정보
+router.get('/users/:userId', getUserDetail);
+
+// PUT /api/admin/users/:userId - 유저 정보 수정
+router.put('/users/:userId', updateUser);
+
+// POST /api/admin/users/:userId/items - 유저 아이템 추가
+router.post('/users/:userId/items', addUserItem);
+
+// DELETE /api/admin/users/items/:inventoryId - 유저 아이템 삭제
+router.delete('/users/items/:inventoryId', deleteUserItem);
+
+// POST /api/admin/users/:userId/abilities - 유저 능력 추가
+router.post('/users/:userId/abilities', addUserAbility);
+
+// DELETE /api/admin/users/abilities/:abilityId - 유저 능력 삭제
+router.delete('/users/abilities/:abilityId', deleteUserAbility);
+
+// DELETE /api/admin/users/checkpoints/:checkpointId - 유저 체크포인트 삭제
+router.delete('/users/checkpoints/:checkpointId', deleteUserCheckpoint);
 
 // Twine 파일 임포트
 // POST /api/admin/import-twine

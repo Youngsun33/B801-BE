@@ -56,7 +56,7 @@ const getStoryNode = async (req, res) => {
           ORDER BY ur.id DESC
           LIMIT 2
         `;
-                console.log('   → DB에서 최근 능력:', userAbilities.map(a => a.name));
+                console.log('   → DB에서 최근 능력:', userAbilities.map((a) => a.name));
             }
             if (userAbilities.length > 0) {
                 const abilityText = userAbilities.map((a) => `+ ${a.name}\n${a.description}`).join('\n\n');
@@ -88,7 +88,7 @@ const getStoryNode = async (req, res) => {
                 targetNodeId: choice.target_node_number,
                 label: choice.choice_text,
                 available: choice.is_available,
-                requirements: constraints.map(c => ({
+                requirements: constraints.map((c) => ({
                     type: c.resource_type,
                     name: c.resource_name,
                     value: c.required_value,
@@ -229,6 +229,11 @@ const chooseStoryOption = async (req, res) => {
               SET hp = ${newHp}
               WHERE user_id = ${userId} AND status = 'active'
             `;
+                        await prisma_1.prisma.$executeRaw `
+              UPDATE users 
+              SET hp = ${newHp}
+              WHERE id = ${userId}
+            `;
                         delta.hp = result.value_change;
                         console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
                         if (newHp <= 0) {
@@ -254,6 +259,11 @@ const chooseStoryOption = async (req, res) => {
               UPDATE investigation_sessions 
               SET energy = ${newEnergy}
               WHERE user_id = ${userId} AND status = 'active'
+            `;
+                        await prisma_1.prisma.$executeRaw `
+              UPDATE users 
+              SET energy = ${newEnergy}
+              WHERE id = ${userId}
             `;
                         delta.energy = result.value_change;
                         console.log('정신력 업데이트:', currentEnergy, '→', newEnergy, '(변화:', result.value_change, ')');
@@ -452,7 +462,7 @@ const chooseStoryOption = async (req, res) => {
         WHERE c.from_node_id = ${nextNode.id}
         ORDER BY c.order_num ASC
       `;
-            const nextChoicesFormatted = nextChoices.map(c => ({
+            const nextChoicesFormatted = nextChoices.map((c) => ({
                 id: c.id,
                 targetNodeId: c.target_node_number,
                 label: c.choice_text,

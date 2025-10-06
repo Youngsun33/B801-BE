@@ -17,7 +17,7 @@ export const getUserCheckpoints = async (req: Request, res: Response) => {
     });
 
     return res.status(200).json({
-      checkpoints: checkpoints.map(cp => ({
+      checkpoints: checkpoints.map((cp: any) => ({
         id: cp.id,
         nodeId: cp.node_id,
         title: cp.title,

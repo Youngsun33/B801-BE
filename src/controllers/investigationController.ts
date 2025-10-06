@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // 조사 시작
 export const startInvestigation = async (req: Request, res: Response) => {
@@ -158,10 +156,10 @@ export const updateSessionStats = async (req: Request, res: Response) => {
         WHERE id = ${session.id}
       `;
 
-      // 유저의 돈 업데이트
+      // 유저의 HP, 에너지, 돈을 최종 상태로 업데이트
       await prisma.$executeRaw`
         UPDATE users 
-        SET gold = ${gold}
+        SET hp = ${hp}, energy = ${energy}, gold = ${gold}
         WHERE id = ${userId}
       `;
 
@@ -185,10 +183,10 @@ export const updateSessionStats = async (req: Request, res: Response) => {
       WHERE id = ${session.id}
     `;
 
-    // 4. 유저의 돈 업데이트
+    // 4. 유저의 HP, 에너지, 돈을 실시간으로 업데이트
     await prisma.$executeRaw`
       UPDATE users 
-      SET gold = ${gold}
+      SET hp = ${hp}, energy = ${energy}, gold = ${gold}
       WHERE id = ${userId}
     `;
 
@@ -235,14 +233,16 @@ export const endInvestigation = async (req: Request, res: Response) => {
       WHERE id = ${session.id}
     `;
 
-    // 3. 최종 골드 업데이트
-    if (session.gold_end !== null) {
-      await prisma.$executeRaw`
-        UPDATE users 
-        SET gold = ${session.gold_end}
-        WHERE id = ${userId}
-      `;
-    }
+    // 3. 최종 HP, 에너지, 골드를 users 테이블에 반영
+    const finalHp = session.hp !== null ? session.hp : 3;
+    const finalEnergy = session.energy !== null ? session.energy : 3;
+    const finalGold = session.gold_end !== null ? session.gold_end : session.gold_start;
+    
+    await prisma.$executeRaw`
+      UPDATE users 
+      SET hp = ${finalHp}, energy = ${finalEnergy}, gold = ${finalGold}
+      WHERE id = ${userId}
+    `;
 
     return res.json({
       message: '조사를 종료했습니다.',
@@ -361,7 +361,7 @@ export const enterStoryDay = async (req: Request, res: Response) => {
         nodeId: node.node_id,
         title: node.title,
         text: node.text_content,
-        choices: choices.map(c => ({
+        choices: choices.map((c: any) => ({
           id: c.id,
           targetNodeId: c.target_node_number,
           label: c.choice_text,
