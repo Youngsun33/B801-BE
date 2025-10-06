@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { parseTwineDocument } from '../lib/parseTwineToMainStory';
-
-const prisma = new PrismaClient();
 
 // Multer 설정 - 메모리 스토리지 사용
 const storage = multer.memoryStorage();
@@ -56,7 +54,7 @@ export const importTwineFile = async (req: Request, res: Response) => {
     }
 
     // 트랜잭션으로 기존 데이터 삭제 후 새 데이터 삽입 (타임아웃 30초로 증가)
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // 기존 메인 스토리 삭제
       const deletedCount = await tx.mainStory.deleteMany({});
       console.log(`🗑️ 기존 메인 스토리 ${deletedCount.count}개 삭제 완료`);
@@ -171,7 +169,7 @@ export const updateStoryNode = async (req: Request, res: Response) => {
     }
 
     // 트랜잭션으로 MainStory와 StoryChoice를 함께 업데이트
-    const updatedNode = await prisma.$transaction(async (tx) => {
+    const updatedNode = await prisma.$transaction(async (tx: any) => {
       // MainStory 업데이트
       const mainStory = await tx.mainStory.update({
         where: { node_id: parseInt(nodeId) },

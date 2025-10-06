@@ -5,7 +5,9 @@ import {
   getStoryNode, 
   chooseStoryOption, 
   autosaveStory, 
-  enterStoryDay 
+  enterStoryDay,
+  completeRandomStoriesAndSaveCheckpoint,
+  completeRandomStoriesAndReturnToCheckpoint
 } from '../controllers/storyController';
 import {
   getRandomStory,
@@ -48,5 +50,11 @@ router.get('/random/:storyId', authenticateAccessToken, getRandomStoryById);
 
 // POST /api/story/random/:storyId/choose
 router.post('/random/:storyId/choose', authenticateAccessToken, chooseRandomStoryOption);
+
+// POST /api/story/complete-random-stories
+router.post('/complete-random-stories', authenticateAccessToken, completeRandomStoriesAndSaveCheckpoint);
+
+// POST /api/story/complete-random-stories-and-return
+router.post('/complete-random-stories-and-return', authenticateAccessToken, completeRandomStoriesAndReturnToCheckpoint);
 
 export default router; 

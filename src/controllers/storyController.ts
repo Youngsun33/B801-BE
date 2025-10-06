@@ -190,13 +190,53 @@ export const getStoryNode = async (req: Request, res: Response) => {
 
     const userId = req.user!.userId;
 
-    // 노드 조회: 모든 노드를 메인 스토리 DB에서 조회
-    console.log('메인 스토리 DB에서 노드 조회:', nodeIdNum);
+    // 랜덤 트리거 노드인지 확인
     const mainStoryNode = await prisma.mainStory.findUnique({
       where: { node_id: nodeIdNum }
     });
+
+    if (mainStoryNode && mainStoryNode.node_type === 'random_trigger') {
+      // 랜덤 스토리 5개 선택
+      const randomStories = await prisma.randomStory.findMany({
+        take: 5,
+        orderBy: {
+          id: 'asc' // 또는 랜덤 정렬
+        }
+      });
+
+      return res.status(200).json({
+        nodeId: mainStoryNode.node_id,
+        title: mainStoryNode.title,
+        text: mainStoryNode.text,
+        nodeType: 'random_trigger',
+        routeName: mainStoryNode.route_name,
+        choices: [
+          {
+            id: 0,
+            targetNodeId: 0,
+            label: "랜덤 스토리 진행",
+            available: true,
+            requirements: []
+          }
+        ],
+        randomStories: randomStories.map((story: any) => ({
+          id: story.id,
+          title: story.title,
+          text: story.text,
+          choices: JSON.parse(story.choices),
+          outcomes: JSON.parse(story.outcomes)
+        })),
+        rewards: null
+      });
+    }
+
+    // 노드 조회: 모든 노드를 메인 스토리 DB에서 조회
+    console.log('메인 스토리 DB에서 노드 조회:', nodeIdNum);
+    const mainStoryNodeForCheck = await prisma.mainStory.findUnique({
+      where: { node_id: nodeIdNum }
+    });
     
-    if (!mainStoryNode) {
+    if (!mainStoryNodeForCheck) {
       console.log('DB에서 노드를 찾을 수 없음, STORY_NODES에서 조회 시도:', nodeIdNum);
       // DB에서 찾을 수 없으면 STORY_NODES에서 조회
       if (STORY_NODES[nodeIdNum]) {
@@ -220,20 +260,35 @@ export const getStoryNode = async (req: Request, res: Response) => {
       }
     });
 
+    // 사용자 능력 조회 (선택지 필터링용)
+    const userStoryAbilities = await prisma.userStoryAbility.findMany({
+      where: { user_id: userId },
+      include: { story_ability: true }
+    });
+
     // StoryChoice를 게임 형식으로 변환
-    const choices = storyChoices.map((choice, index) => {
-      // 요구사항 체크 (현재는 단순히 사용 가능한 선택지만 표시)
+    const choices = storyChoices.map((choice: any, index: number) => {
+      // 요구사항 체크
       const isAvailable = choice.is_available && 
-        choice.choice_requirements.every(req => {
-          // TODO: 실제 능력/아이템 체크 로직 구현
+        choice.choice_requirements.every((req: any) => {
+          if (req.requirement_type === 'ability') {
+            // 능력 요구사항 체크
+            const hasAbility = userStoryAbilities.some((ua: any) => 
+              ua.story_ability.name === req.description?.split(' ')[0] && 
+              ua.quantity >= (req.requirement_value || 1)
+            );
+            return hasAbility;
+          }
+          // 다른 요구사항 타입들은 일단 true로 처리
           return true;
         });
 
       return {
-        id: choice.target_node_id || (index + 1), // target_node_id를 id로 사용
+        id: choice.id, // 선택지 ID
+        targetNodeId: choice.target_node_id,
         label: choice.choice_text,
         available: isAvailable,
-        requirements: choice.choice_requirements.map(req => ({
+        requirements: choice.choice_requirements.map((req: any) => ({
           type: req.requirement_type,
           value: req.requirement_value,
           operator: req.operator,
@@ -242,16 +297,34 @@ export const getStoryNode = async (req: Request, res: Response) => {
       };
     });
     
+    // mainStoryNode가 null인 경우 처리
+    if (!mainStoryNodeForCheck) {
+      return res.status(404).json({ error: '노드를 찾을 수 없습니다.' });
+    }
+
+    // 기존 choices JSON 파싱 (fallback)
+    let fallbackChoices = [];
+    try {
+      fallbackChoices = JSON.parse(mainStoryNodeForCheck.choices || '[]');
+    } catch (e) {
+      console.error('Choices JSON 파싱 오류:', e);
+    }
+
+    // StoryChoice가 있으면 사용, 없으면 기존 choices 사용
+    const finalChoices = choices.length > 0 ? choices : fallbackChoices;
+
     let node = {
-      nodeId: mainStoryNode.node_id,
-      text: mainStoryNode.text,
-      choices: choices,
-      rewards: mainStoryNode.rewards ? JSON.parse(mainStoryNode.rewards) : undefined,
-      nodeType: mainStoryNode.node_type
+      nodeId: mainStoryNodeForCheck.node_id,
+      title: mainStoryNodeForCheck.title,
+      text: mainStoryNodeForCheck.text,
+      choices: finalChoices,
+      rewards: mainStoryNodeForCheck.rewards ? JSON.parse(mainStoryNodeForCheck.rewards) : undefined,
+      nodeType: mainStoryNodeForCheck.node_type,
+      routeName: mainStoryNodeForCheck.route_name
     };
 
-    // 노드 200번: 랜덤 능력 2개 부여
-    if (nodeIdNum === 200) {
+    // 노드 4번: 랜덤 능력 2개 부여
+    if (nodeIdNum === 4) {
       const abilityPool = [
         { id: 1, name: '관찰력', desc: '당신의 장점은 눈이 아주 좋다는 것입니다. 다른 사람이 쉽게 찾지 못할 것들도 매의 눈으로 찾아내기 마련이죠.' },
         { id: 2, name: '근력', desc: '당신의 장점은 힘이 아주 세다는 겁니다. 이 같은 세상에서 힘이란 무엇과도 바꿀 수 없는 능력입니다.' },
@@ -306,8 +379,8 @@ export const getStoryNode = async (req: Request, res: Response) => {
       // ID로부터 능력 정보 추출
       const selected = abilityPool.filter(a => selectedIds.includes(a.id));
       
-      // 텍스트 생성: + 능력명\n\n설명
-      const abilityText = selected.map(a => `+ ${a.name}\n\n${a.desc}`).join('\n\n');
+      // 텍스트 생성: 기본 텍스트 + 능력 목록
+      const abilityText = `당신이 가진 능력이 깨어났습니다...\n\n이제 얻은 능력\n\n${selected.map(a => `+ ${a.name}\n${a.desc}`).join('\n\n')}`;
       
       // 노드 수정
       node = {
@@ -377,7 +450,8 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
 
     // 모든 노드를 DB에서 처리
     const currentNodeId = progress.last_node_id;
-    let nextNodeId: number | string | undefined;
+    let nextNodeId: number | undefined;
+    let selectedChoice: any = null;
     
     // DB에서 현재 노드 조회
     console.log('DB에서 현재 노드 조회:', currentNodeId);
@@ -399,20 +473,20 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       // STORY_NODES 처리 로직 (기존 코드)
       if (currentNodeId >= 400) {
         console.log('STORY_NODES 메인 스토리 처리');
-        nextNodeId = choiceId;
+        nextNodeId = Number(choiceId);
       } else {
         console.log('STORY_NODES 일반 노드 처리');
-        nextNodeId = choiceId;
+        nextNodeId = Number(choiceId);
       }
     } else {
       // DB에서 찾은 경우: 현재 노드의 선택지에서 targetNodeId 찾기
       console.log('DB 메인 스토리에서 선택지 처리');
       
       // 새로운 StoryChoice 테이블에서 선택지 찾기
-      const selectedChoice = await prisma.storyChoice.findFirst({
+      selectedChoice = await prisma.storyChoice.findFirst({
         where: {
           story_node_id: currentNodeId,
-          target_node_id: choiceId
+          id: choiceId
         },
         include: {
           choice_requirements: true
@@ -435,7 +509,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       console.log('메인 스토리 다음 노드 ID:', nextNodeId);
       
       // 메인스토리에서 다음 노드가 없으면 에러 반환
-      if (!nextNodeId || nextNodeId === choiceId) {
+      if (!nextNodeId) {
         console.log('메인스토리에서 다음 노드 없음');
         return res.status(404).json({ error: '다음 스토리 노드가 없습니다.' });
       }
@@ -470,7 +544,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     };
 
     // 트랜잭션으로 보상 적용 및 진행상황 업데이트
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result: { delta: any; investigation_count: number } = await prisma.$transaction(async (tx: any) => {
       const delta: any = {};
       
       // 트랜잭션 내부에서 필요한 데이터 다시 조회
@@ -482,10 +556,10 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         where: { id: userId }
       });
 
-      // 노드 200 또는 400에 도착하는 경우: 랜덤 능력 2개를 즉시 부여
+      // 노드 4에 도착하는 경우: 랜덤 능력 2개를 즉시 부여
       let newTempData = currentProgress?.temp_data;
       
-      if (nextNodeId === 200 || nextNodeId === 400) {
+      if (nextNodeId === 4) {
         console.log(`노드 ${nextNodeId} 도착 - 능력 부여 시작`);
         
         // temp_data가 있으면 사용, 없으면 새로 생성
@@ -557,13 +631,13 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       // 진행상황 업데이트: temp_data 처리
       let finalTempData = newTempData;
       
-      // 노드 200에서 나가는 경우: temp_data 클리어
-      if (choiceId === 2001) {
-        console.log('노드 200 탈출 - temp_data 클리어');
+      // 노드 4에서 나가는 경우: temp_data 클리어
+      if (currentNodeId === 4) {
+        console.log('노드 4 탈출 - temp_data 클리어');
         finalTempData = null;
       }
-      // 노드 200이 아닌 다른 노드로 가는 경우: temp_data 클리어
-      else if (nextNodeId !== 200) {
+      // 노드 4가 아닌 다른 노드로 가는 경우: temp_data 클리어
+      else if (nextNodeId !== 4) {
         finalTempData = null;
       }
       
@@ -575,8 +649,104 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         }
       });
 
-      // 체크포인트 자동 저장 (중복 방지)
-      if (nextNode.nodeType === 'checkpoint') {
+      // "길을 계속 걸어간다" 선택지 처리 - 랜덤 스토리 5개 후 최근 체크포인트로 복귀
+      if (selectedChoice && selectedChoice.choice_text === '길을 계속 걸어간다') {
+        console.log(`"길을 계속 걸어간다" 선택 - 랜덤 스토리 5개 삽입`);
+        
+        // 랜덤 스토리 5개 선택
+        const allRandomStories = await tx.randomStory.findMany();
+        const shuffled = allRandomStories.sort(() => 0.5 - Math.random());
+        const selectedStories = shuffled.slice(0, 5);
+        
+        console.log('선택된 랜덤 스토리들:', selectedStories.map((s: any) => s.title));
+        
+        // 랜덤 스토리들을 delta에 추가
+        delta.randomStories = selectedStories.map((story: any) => ({
+          id: story.id,
+          title: story.title,
+          description: story.description,
+          choices: JSON.parse(story.choices),
+          outcomes: JSON.parse(story.outcomes)
+        }));
+        
+        // 최근 체크포인트 찾기
+        const latestCheckpoint = await tx.userCheckpoint.findFirst({
+          where: { user_id: userId },
+          orderBy: { saved_at: 'desc' }
+        });
+        
+        if (latestCheckpoint) {
+          console.log(`최근 체크포인트: 노드 ${latestCheckpoint.node_id} - ${latestCheckpoint.title}`);
+          delta.returnToCheckpoint = {
+            nodeId: latestCheckpoint.node_id,
+            title: latestCheckpoint.title
+          };
+        } else {
+          console.log('최근 체크포인트 없음 - 노드 300으로 복귀');
+          delta.returnToCheckpoint = {
+            nodeId: 300,
+            title: '체크포인트 1 - 세 갈래 길'
+          };
+        }
+        
+        // 랜덤 스토리 완료 후 체크포인트로 복귀하도록 플래그 설정
+        delta.shouldReturnEarly = true;
+        delta.earlyReturnData = {
+          nodeId: nextNodeId,
+          title: nextNode.title,
+          text: nextNode.text,
+          choices: nextNode.choices,
+          delta: {
+            randomStories: delta.randomStories,
+            returnToCheckpoint: delta.returnToCheckpoint
+          },
+          randomStories: delta.randomStories
+        };
+      }
+      // 체크포인트 도달 전 랜덤 스토리 5개 삽입
+      else if (nextNode.nodeType === 'checkpoint') {
+        console.log(`체크포인트 ${nextNodeId} 도달 - 랜덤 스토리 5개 삽입`);
+        
+        // 랜덤 스토리 5개 선택
+        const allRandomStories = await tx.randomStory.findMany();
+        const shuffled = allRandomStories.sort(() => 0.5 - Math.random());
+        const selectedStories = shuffled.slice(0, 5);
+        
+        console.log('선택된 랜덤 스토리들:', selectedStories.map((s: any) => s.title));
+        
+        // 랜덤 스토리들을 delta에 추가
+        delta.randomStories = selectedStories.map((story: any) => ({
+          id: story.id,
+          title: story.title,
+          description: story.description,
+          choices: JSON.parse(story.choices),
+          outcomes: JSON.parse(story.outcomes)
+        }));
+        
+        // 체크포인트는 랜덤 스토리 완료 후에 저장되도록 플래그 설정
+        delta.checkpointPending = true;
+        delta.checkpointNodeId = nextNodeId;
+        delta.checkpointNode = nextNode;
+        
+        // 실제 체크포인트 저장은 랜덤 스토리 완료 후에 처리
+        // 트랜잭션 밖에서 Response 반환하도록 플래그 설정
+        delta.shouldReturnEarly = true;
+        delta.earlyReturnData = {
+          nodeId: nextNodeId,
+          title: nextNode.title,
+          text: nextNode.text,
+          choices: nextNode.choices,
+          delta: {
+            randomStories: delta.randomStories,
+            checkpointPending: delta.checkpointPending,
+            checkpointNodeId: delta.checkpointNodeId
+          },
+          randomStories: delta.randomStories
+        };
+      }
+
+      // 체크포인트 자동 저장 (중복 방지) - 랜덤 스토리 완료 후
+      if (nextNode.nodeType === 'checkpoint' && !delta.checkpointPending) {
         const user = await tx.user.findUnique({ where: { id: userId } });
         if (user) {
           // 이미 이 노드에 대한 체크포인트가 있는지 확인
@@ -746,6 +916,11 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       return { delta, investigation_count: currentProgress?.investigation_count || 0 };
     });
 
+    // 랜덤 스토리가 필요한 경우 조기 반환
+    if (result.delta.shouldReturnEarly) {
+      return res.status(200).json(result.delta.earlyReturnData);
+    }
+
     return res.status(200).json({
       nodeId: nextNodeId,
       delta: result.delta,
@@ -805,12 +980,12 @@ export const enterStoryDay = async (req: Request, res: Response) => {
       where: { user_id: userId }
     });
 
-    // 튜토리얼 노드부터 시작 (664번부터 시작)
+    // 튜토리얼 노드부터 시작 (1번부터 시작)
     const tutorialNode = await prisma.mainStory.findUnique({
-      where: { node_id: 664 }
+      where: { node_id: 1 }
     });
     
-    const startNodeId = tutorialNode ? 664 : 400; // 튜토리얼이 있으면 664, 없으면 400으로 fallback
+    const startNodeId = tutorialNode ? 1 : 400; // 튜토리얼이 있으면 1, 없으면 400으로 fallback
     console.log('게임 시작 노드 ID:', startNodeId);
 
     if (progress) {
@@ -877,6 +1052,162 @@ export const enterStoryDay = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Enter story day error:', error);
+    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+  }
+};
+
+// 랜덤 스토리 완료 후 체크포인트 저장
+export const completeRandomStoriesAndSaveCheckpoint = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { checkpointNodeId } = req.body;
+
+    if (!checkpointNodeId) {
+      return res.status(400).json({ error: '체크포인트 노드 ID가 필요합니다.' });
+    }
+
+    console.log(`랜덤 스토리 완료 - 체크포인트 ${checkpointNodeId} 저장`);
+
+    const result = await prisma.$transaction(async (tx: any) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new Error('사용자를 찾을 수 없습니다.');
+      }
+
+      // 체크포인트 노드 조회
+      const checkpointNode = await tx.mainStory.findUnique({
+        where: { node_id: checkpointNodeId }
+      });
+
+      if (!checkpointNode) {
+        throw new Error('체크포인트 노드를 찾을 수 없습니다.');
+      }
+
+      // 이미 이 노드에 대한 체크포인트가 있는지 확인
+      const existingCheckpoint = await tx.userCheckpoint.findFirst({
+        where: { 
+          user_id: userId,
+          node_id: checkpointNodeId
+        }
+      });
+
+      let delta: any = {};
+
+      if (existingCheckpoint) {
+        console.log(`체크포인트 이미 존재: 노드 ${checkpointNodeId}`);
+        delta.checkpoint = {
+          title: existingCheckpoint.title,
+          message: '이미 도달한 체크포인트입니다.'
+        };
+      } else {
+        // 현재 유저의 체크포인트 개수 확인
+        const checkpointCount = await tx.userCheckpoint.count({
+          where: { user_id: userId }
+        });
+        
+        // 체크포인트 제목 생성 (1부터 시작)
+        const checkpointNumber = checkpointCount + 1;
+        const checkpointTitle = `체크포인트 ${checkpointNumber}`;
+        const checkpointDesc = checkpointNode.text.substring(0, 100) + '...';
+        
+        await tx.userCheckpoint.create({
+          data: {
+            user_id: userId,
+            node_id: checkpointNodeId,
+            title: checkpointTitle,
+            description: checkpointDesc,
+            hp: user.hp,
+            energy: user.energy,
+            gold: user.gold
+          }
+        });
+
+        console.log(`체크포인트 저장: ${checkpointTitle}`);
+        delta.checkpoint = {
+          title: checkpointTitle,
+          message: '체크포인트 도달. 진행 상황이 저장되었습니다.'
+        };
+      }
+
+      return {
+        checkpoint: delta.checkpoint
+      };
+    });
+
+    return res.status(200).json({
+      message: '랜덤 스토리 완료 및 체크포인트 저장',
+      delta: result
+    });
+
+  } catch (error) {
+    console.error('Complete random stories and save checkpoint error:', error);
+    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+  }
+};
+
+// 랜덤 스토리 완료 후 최근 체크포인트로 복귀
+export const completeRandomStoriesAndReturnToCheckpoint = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { returnToCheckpoint } = req.body;
+
+    if (!returnToCheckpoint || !returnToCheckpoint.nodeId) {
+      return res.status(400).json({ error: '복귀할 체크포인트 정보가 필요합니다.' });
+    }
+
+    console.log(`랜덤 스토리 완료 - 체크포인트 ${returnToCheckpoint.nodeId}로 복귀`);
+
+    const result = await prisma.$transaction(async (tx: any) => {
+      // 진행상황 업데이트
+      await tx.storyProgress.updateMany({
+        where: { user_id: userId },
+        data: {
+          last_node_id: returnToCheckpoint.nodeId
+        }
+      });
+
+      // 체크포인트 노드 정보 조회
+      const checkpointNode = await tx.mainStory.findUnique({
+        where: { node_id: returnToCheckpoint.nodeId },
+        include: {
+          story_choices: {
+            orderBy: { order_index: 'asc' }
+          }
+        }
+      });
+
+      if (!checkpointNode) {
+        throw new Error('체크포인트 노드를 찾을 수 없습니다.');
+      }
+
+      // StoryNode 형식으로 변환
+      const nodeData = {
+        nodeId: checkpointNode.node_id,
+        title: checkpointNode.title,
+        text: checkpointNode.text,
+        choices: checkpointNode.story_choices.map((choice: any) => ({
+          id: choice.id,
+          targetNodeId: choice.target_node_id,
+          label: choice.choice_text
+        })),
+        nodeType: checkpointNode.node_type,
+        imageUrl: checkpointNode.image_url,
+        imageAlt: checkpointNode.image_alt
+      };
+
+      return {
+        node: nodeData,
+        message: `체크포인트 "${returnToCheckpoint.title}"로 복귀했습니다.`
+      };
+    });
+
+    return res.status(200).json({
+      message: result.message,
+      node: result.node
+    });
+
+  } catch (error) {
+    console.error('Complete random stories and return to checkpoint error:', error);
     return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   }
 }; 
