@@ -26,6 +26,7 @@ import storyAbilityRoutes from './routes/storyAbilities';
 import storyItemRoutes from './routes/storyItems';
 import checkpointRoutes from './routes/checkpoints';
 import mainStoryRoutes from './routes/mainStory';
+import investigationRoutes from './routes/investigation';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -63,6 +64,7 @@ app.use('/api/story-abilities', storyAbilityRoutes);
 app.use('/api/story-items', storyItemRoutes);
 app.use('/api/checkpoints', checkpointRoutes);
 app.use('/api/main-story', mainStoryRoutes);
+app.use('/api/investigation', investigationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

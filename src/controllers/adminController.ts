@@ -107,29 +107,17 @@ export const importTwineFile = async (req: Request, res: Response) => {
   }
 };
 
-// 스토리 노드 목록 조회
+// 스토리 노드 목록 조회 (새 ERD 구조)
 export const getStoryNodes = async (req: Request, res: Response) => {
   try {
-    const nodes = await prisma.mainStory.findMany({
-      orderBy: { node_id: 'asc' },
-      select: {
-        id: true,
-        node_id: true,
-        title: true,
-        text: true,
-        node_type: true,
-        route_name: true,
-        choices: true,
-        rewards: true,
-        position_x: true,
-        position_y: true,
-        created_at: true
-      }
-    });
+    const nodes = await prisma.$queryRaw`
+      SELECT * FROM nodes 
+      ORDER BY story_id, node_id ASC
+    `;
 
     return res.status(200).json({
       nodes: nodes,
-      totalCount: nodes.length
+      totalCount: (nodes as any[]).length
     });
 
   } catch (error) {
@@ -138,187 +126,40 @@ export const getStoryNodes = async (req: Request, res: Response) => {
   }
 };
 
-// 스토리 노드 업데이트
+// 스토리 노드 업데이트 (임시 비활성화 - 새 ERD 구조로 재구현 필요)
 export const updateStoryNode = async (req: Request, res: Response) => {
-  try {
-    const { nodeId } = req.params;
-    const { title, text, choices, rewards, route_name, image_url, image_alt } = req.body;
-
-    // 선택지를 JSON 배열로 변환
-    let choicesArray: string[] = [];
-    if (typeof choices === 'string' && choices.trim()) {
-      choicesArray = choices.split('|').map((choice: string) => choice.trim()).filter(Boolean);
-    }
-
-    // 보상을 JSON 객체로 변환
-    let rewardsObject: any = null;
-    if (typeof rewards === 'string' && rewards.trim()) {
-      try {
-        rewardsObject = JSON.parse(rewards);
-      } catch {
-        // 간단한 파싱: "골드:100, 에너지:50" 형태
-        const rewardPairs = rewards.split(',').map((pair: string) => pair.trim());
-        rewardsObject = {};
-        rewardPairs.forEach(pair => {
-          const [key, value] = pair.split(':').map(s => s.trim());
-          if (key && value) {
-            rewardsObject[key] = parseInt(value) || value;
-          }
-        });
-      }
-    }
-
-    // 트랜잭션으로 MainStory와 StoryChoice를 함께 업데이트
-    const updatedNode = await prisma.$transaction(async (tx: any) => {
-      // MainStory 업데이트
-      const mainStory = await tx.mainStory.update({
-        where: { node_id: parseInt(nodeId) },
-        data: {
-          title: title || undefined,
-          text: text || undefined,
-          choices: JSON.stringify(choicesArray), // 기존 호환성 유지
-          rewards: rewardsObject ? JSON.stringify(rewardsObject) : null,
-          route_name: route_name || undefined,
-          image_url: image_url || undefined,
-          image_alt: image_alt || undefined
-        }
-      });
-
-      // 기존 StoryChoice 삭제
-      await tx.storyChoice.deleteMany({
-        where: { story_node_id: parseInt(nodeId) }
-      });
-
-      // 새로운 StoryChoice 생성
-      if (Array.isArray(choicesArray) && choicesArray.length > 0) {
-        for (let i = 0; i < choicesArray.length; i++) {
-          const choiceText = choicesArray[i];
-          
-          // choices가 JSON 문자열인 경우 파싱
-          let targetNodeId: number | null = null;
-          let choiceLabel = choiceText;
-          
-          try {
-            const parsedChoice = JSON.parse(choiceText);
-            if (parsedChoice && typeof parsedChoice === 'object') {
-              choiceLabel = parsedChoice.label || parsedChoice.text || choiceText;
-              targetNodeId = parsedChoice.targetNodeId || parsedChoice.target_node_id || null;
-            }
-          } catch {
-            // JSON이 아닌 경우 그대로 사용
-          }
-
-          await tx.storyChoice.create({
-            data: {
-              story_node_id: parseInt(nodeId),
-              choice_text: choiceLabel,
-              target_node_id: targetNodeId,
-              order_index: i,
-              is_available: true
-            }
-          });
-        }
-      }
-
-      return mainStory;
-    });
-
-    return res.status(200).json({
-      message: '스토리 노드가 성공적으로 업데이트되었습니다.',
-      node: updatedNode
-    });
-
-  } catch (error) {
-    console.error('❌ 스토리 노드 업데이트 중 오류:', error);
-    return res.status(500).json({ error: '스토리 노드 업데이트 중 오류가 발생했습니다.' });
-  }
+  return res.status(501).json({ 
+    error: '이 기능은 현재 재구현 중입니다.',
+    message: '새로운 ERD 구조에 맞게 업데이트 예정입니다.'
+  });
 };
 
-// 스토리 노드 삭제
+// 스토리 노드 삭제 (임시 비활성화 - 새 ERD 구조로 재구현 필요)
 export const deleteStoryNode = async (req: Request, res: Response) => {
-  try {
-    const { nodeId } = req.params;
-
-    const deletedNode = await prisma.mainStory.delete({
-      where: { node_id: parseInt(nodeId) }
-    });
-
-    return res.status(200).json({
-      message: '스토리 노드가 성공적으로 삭제되었습니다.',
-      deletedNode: deletedNode
-    });
-
-  } catch (error) {
-    console.error('❌ 스토리 노드 삭제 중 오류:', error);
-    return res.status(500).json({ error: '스토리 노드 삭제 중 오류가 발생했습니다.' });
-  }
+  return res.status(501).json({ 
+    error: '이 기능은 현재 재구현 중입니다.',
+    message: '새로운 ERD 구조에 맞게 업데이트 예정입니다.'
+  });
 };
 
-// 새 스토리 노드 생성
+// 새 스토리 노드 생성 (임시 비활성화 - 새 ERD 구조로 재구현 필요)
 export const createStoryNode = async (req: Request, res: Response) => {
-  try {
-    const { title, text, choices, rewards, route_name, node_type = 'main' } = req.body;
-
-    // 새로운 노드 ID 생성 (기존 최대값 + 1)
-    const maxNode = await prisma.mainStory.findFirst({
-      orderBy: { node_id: 'desc' }
-    });
-    const newNodeId = (maxNode?.node_id || 400) + 1;
-
-    // 선택지를 JSON 배열로 변환
-    let choicesArray: string[] = [];
-    if (typeof choices === 'string' && choices.trim()) {
-      choicesArray = choices.split('|').map((choice: string) => choice.trim()).filter(Boolean);
-    }
-
-    // 보상을 JSON 객체로 변환
-    let rewardsObject: any = null;
-    if (typeof rewards === 'string' && rewards.trim()) {
-      try {
-        rewardsObject = JSON.parse(rewards);
-      } catch {
-        // 간단한 파싱: "골드:100, 에너지:50" 형태
-        const rewardPairs = rewards.split(',').map((pair: string) => pair.trim());
-        rewardsObject = {};
-        rewardPairs.forEach(pair => {
-          const [key, value] = pair.split(':').map(s => s.trim());
-          if (key && value) {
-            rewardsObject[key] = parseInt(value) || value;
-          }
-        });
-      }
-    }
-
-    const newNode = await prisma.mainStory.create({
-      data: {
-        node_id: newNodeId,
-        title: title || `새 노드 ${newNodeId}`,
-        text: text || '',
-        choices: JSON.stringify(choicesArray),
-        rewards: rewardsObject ? JSON.stringify(rewardsObject) : null,
-        route_name: route_name || null,
-        node_type: node_type
-      }
-    });
-
-    return res.status(201).json({
-      message: '새 스토리 노드가 성공적으로 생성되었습니다.',
-      node: newNode
-    });
-
-  } catch (error) {
-    console.error('❌ 스토리 노드 생성 중 오류:', error);
-    return res.status(500).json({ error: '스토리 노드 생성 중 오류가 발생했습니다.' });
-  }
+  return res.status(501).json({ 
+    error: '이 기능은 현재 재구현 중입니다.',
+    message: '새로운 ERD 구조에 맞게 업데이트 예정입니다.'
+  });
 };
 
 // 관리자 통계 조회
 export const getAdminStats = async (req: Request, res: Response) => {
   try {
-    const [userCount, storyNodeCount] = await Promise.all([
-      prisma.user.count(),
-      prisma.mainStory.count()
-    ]);
+    const userCount = await prisma.user.count();
+    
+    // 새 ERD 구조에서 노드 카운트
+    const storyNodeResult = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as count FROM nodes
+    `;
+    const storyNodeCount = storyNodeResult[0]?.count || 0;
     
     // 현재는 last_login 필드가 없으므로 전체 사용자 수를 활성 사용자로 간주
     const activeUsers = userCount;

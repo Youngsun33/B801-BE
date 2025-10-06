@@ -1,0 +1,359 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// 사용자 관련 테이블
+// ============================================================================
+
+model User {
+  id             Int            @id @default(autoincrement())
+  username       String         @unique
+  password       String
+  hp             Int
+  energy         Int
+  gold           Int
+  attack_power   Int
+  current_day    Int
+  is_alive       Boolean        @default(true)
+  role           String         @default("user")  // "user", "admin", "moderator"
+
+  // 관계
+  story_progress        StoryProgress[]
+  inventory             Inventory[]
+  team_members          TeamMember[]
+  user_abilities        UserAbility[]        // 레이드용 능력
+  user_resources        UserResource[]       // 스토리용 자원/능력
+  user_save_states      UserSaveState[]      // 저장 상태
+  checkpoints           UserCheckpoint[]     // 체크포인트
+
+  @@map("users")
+}
+
+// ============================================================================
+// 스토리 시스템 - ERD 중심 설계
+// ============================================================================
+
+model Story {
+  id          Int    @id @default(autoincrement())
+  story_type  String @default("MAIN") // 'MAIN', 'RANDOM', 'TUTORIAL'
+  title       String?
+  description String?
+  created_at  DateTime @default(now())
+  
+  // 관계
+  nodes       Node[]
+  checkpoints StoryCheckpoint[]
+  
+  @@map("stories")
+}
+
+model Node {
+  id           Int     @id @default(autoincrement())
+  story_id     Int
+  node_id      Int     @unique // 스토리 내 고유 노드 ID
+  title        String?
+  text_content String  @db.Text
+  image_url    String?
+  image_alt    String?
+  node_type    String  @default("main") // 'main', 'checkpoint', 'special'
+  position_x   Int?
+  position_y   Int?
+  created_at   DateTime @default(now())
+  
+  // 관계
+  story           Story          @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  outgoing_choices Choice[]      @relation("FromNode")
+  incoming_choices Choice[]      @relation("ToNode")
+  checkpoints     StoryCheckpoint[]
+  
+  @@unique([story_id, node_id])
+  @@map("nodes")
+}
+
+model Choice {
+  id           Int    @id @default(autoincrement())
+  from_node_id Int
+  to_node_id   Int
+  choice_text  String
+  order_num    Int    @default(1)
+  is_available Boolean @default(true)
+  created_at   DateTime @default(now())
+  
+  // 관계
+  from_node Node @relation("FromNode", fields: [from_node_id], references: [id], onDelete: Cascade)
+  to_node   Node @relation("ToNode", fields: [to_node_id], references: [id], onDelete: Cascade)
+  
+  // 제약조건과 결과
+  constraints ChoiceConstraint[]
+  results     ChoiceResult[]
+  
+  @@map("choices")
+}
+
+// ============================================================================
+// 자원/능력 시스템
+// ============================================================================
+
+model Resource {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  description String?
+  type        String // 'STAT'(수치), 'SKILL'(능력 보유), 'ITEM'(아이템)
+  created_at  DateTime @default(now())
+  
+  // 관계
+  user_resources     UserResource[]
+  choice_constraints ChoiceConstraint[]
+  choice_results     ChoiceResult[]
+  
+  @@map("resources")
+}
+
+model UserResource {
+  id          Int     @id @default(autoincrement())
+  user_id     Int
+  resource_id Int
+  quantity    Int     @default(0)
+  obtained_at DateTime @default(now())
+  
+  // 관계
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, resource_id])
+  @@map("user_resources")
+}
+
+// ============================================================================
+// 선택지 제약조건과 결과
+// ============================================================================
+
+model ChoiceConstraint {
+  id               Int    @id @default(autoincrement())
+  choice_id        Int
+  resource_id      Int
+  required_value   Int
+  comparison_type  String @default(">=") // '>=', '<=', '==', '>', '<'
+  description      String?
+  created_at       DateTime @default(now())
+  
+  // 관계
+  choice   Choice   @relation(fields: [choice_id], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  
+  @@map("choice_constraints")
+}
+
+model ChoiceResult {
+  id           Int    @id @default(autoincrement())
+  choice_id    Int
+  resource_id  Int
+  value_change Int
+  description  String?
+  created_at   DateTime @default(now())
+  
+  // 관계
+  choice   Choice   @relation(fields: [choice_id], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  
+  @@map("choice_results")
+}
+
+// ============================================================================
+// 체크포인트 시스템
+// ============================================================================
+
+model StoryCheckpoint {
+  id              Int    @id @default(autoincrement())
+  story_id        Int
+  node_id         Int
+  checkpoint_name String
+  description     String?
+  created_at      DateTime @default(now())
+  
+  // 관계
+  story Story @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  node  Node  @relation(fields: [node_id], references: [id], onDelete: Cascade)
+  
+  @@unique([story_id, node_id])
+  @@map("story_checkpoints")
+}
+
+model UserCheckpoint {
+  id           Int      @id @default(autoincrement())
+  user_id      Int
+  checkpoint_id Int?    // StoryCheckpoint 참조 (선택사항)
+  node_id      Int      // 직접 노드 참조
+  title        String
+  description  String?
+  hp           Int
+  energy       Int
+  gold         Int
+  saved_at     DateTime @default(now())
+  
+  // 관계
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@map("user_checkpoints")
+}
+
+// ============================================================================
+// 저장 상태 관리
+// ============================================================================
+
+model UserSaveState {
+  id           Int      @id @default(autoincrement())
+  user_id      Int
+  story_id     Int
+  current_node_id Int
+  save_name    String?
+  temp_data    String?  // JSON 형태의 임시 데이터
+  saved_at     DateTime @default(now())
+  
+  // 관계
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@map("user_save_states")
+}
+
+// ============================================================================
+// 스토리 진행 상황
+// ============================================================================
+
+model StoryProgress {
+  id                  Int   @id @default(autoincrement())
+  user_id             Int
+  story_id            Int
+  current_node_id     Int
+  investigation_count Int
+  checkpoint_count    Int   @default(0)
+  story_type          String @default("random") // random, main, checkpoint
+  temp_data           String? // 임시 데이터 저장용 (JSON)
+
+  // 관계
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, story_id])
+  @@map("story_progress")
+}
+
+// ============================================================================
+// 기존 레이드 시스템 (호환성 유지)
+// ============================================================================
+
+model Item {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String
+  type        ItemType
+
+  inventory   Inventory[]
+  raid_items  RaidItem[]
+
+  @@map("items")
+}
+
+model Inventory {
+  id       Int  @id @default(autoincrement())
+  user_id  Int
+  item_id  Int
+  quantity Int
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@map("inventory")
+}
+
+model RaidTeam {
+  id      Int        @id @default(autoincrement())
+  day     Int
+  status  RaidStatus
+  boss_id Int
+
+  boss         Boss         @relation(fields: [boss_id], references: [id])
+  team_members TeamMember[]
+  raid_items   RaidItem[]
+
+  @@map("raid_teams")
+}
+
+model TeamMember {
+  id       Int @id @default(autoincrement())
+  team_id  Int
+  user_id  Int
+
+  team RaidTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("team_members")
+}
+
+model RaidItem {
+  id       Int @id @default(autoincrement())
+  team_id  Int
+  item_id  Int
+  quantity Int
+
+  team RaidTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  item Item     @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@map("raid_items")
+}
+
+model Boss {
+  id     Int    @id @default(autoincrement())
+  name   String
+  hp     Int
+  skills String
+
+  raid_teams RaidTeam[]
+
+  @@map("bosses")
+}
+
+model Ability {
+  id              Int           @id @default(autoincrement())
+  name            String
+  description     String
+  effect_type     String        // attack, defense, support, etc.
+  effect_value    Int
+  
+  user_abilities  UserAbility[]
+
+  @@map("abilities")
+}
+
+model UserAbility {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  ability_id  Int
+  is_active   Boolean  @default(false)
+  obtained_at DateTime @default(now())
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ability Ability @relation(fields: [ability_id], references: [id], onDelete: Cascade)
+
+  @@map("user_abilities")
+}
+
+// ============================================================================
+// 열거형
+// ============================================================================
+
+enum ItemType {
+  story
+  raid
+}
+
+enum RaidStatus {
+  ongoing
+  cleared
+  failed
+}

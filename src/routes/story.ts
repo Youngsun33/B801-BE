@@ -1,13 +1,8 @@
 import { Router } from 'express';
 import { 
-  getActionPointStatus, 
-  getStoryProgress, 
   getStoryNode, 
-  chooseStoryOption, 
-  autosaveStory, 
-  enterStoryDay,
-  completeRandomStoriesAndSaveCheckpoint,
-  completeRandomStoriesAndReturnToCheckpoint
+  chooseStoryOption,
+  getUserResources
 } from '../controllers/storyController';
 import {
   getRandomStory,
@@ -15,16 +10,14 @@ import {
   chooseRandomStoryOption,
   getAllRandomStories
 } from '../controllers/randomStoryController';
+import { getRemainingInvestigations, enterStoryDay } from '../controllers/investigationController';
 import { authenticateAccessToken } from '../middleware/auth';
 
 const router = Router();
 
 // 메인 스토리
-// GET /api/story/action-point
-router.get('/action-point', authenticateAccessToken, getActionPointStatus);
-
-// GET /api/story/progress
-router.get('/progress', authenticateAccessToken, getStoryProgress);
+// GET /api/story/action-point (investigation으로 리다이렉트)
+router.get('/action-point', authenticateAccessToken, getRemainingInvestigations);
 
 // GET /api/story/nodes/{nodeId}
 router.get('/nodes/:nodeId', authenticateAccessToken, getStoryNode);
@@ -32,10 +25,10 @@ router.get('/nodes/:nodeId', authenticateAccessToken, getStoryNode);
 // POST /api/story/choose
 router.post('/choose', authenticateAccessToken, chooseStoryOption);
 
-// POST /api/story/autosave
-router.post('/autosave', authenticateAccessToken, autosaveStory);
+// GET /api/story/resources
+router.get('/resources', authenticateAccessToken, getUserResources);
 
-// POST /api/story/day/{day}/enter
+// POST /api/story/day/:day/enter (게임 시작)
 router.post('/day/:day/enter', authenticateAccessToken, enterStoryDay);
 
 // 랜덤 스토리
@@ -50,11 +43,5 @@ router.get('/random/:storyId', authenticateAccessToken, getRandomStoryById);
 
 // POST /api/story/random/:storyId/choose
 router.post('/random/:storyId/choose', authenticateAccessToken, chooseRandomStoryOption);
-
-// POST /api/story/complete-random-stories
-router.post('/complete-random-stories', authenticateAccessToken, completeRandomStoriesAndSaveCheckpoint);
-
-// POST /api/story/complete-random-stories-and-return
-router.post('/complete-random-stories-and-return', authenticateAccessToken, completeRandomStoriesAndReturnToCheckpoint);
 
 export default router; 

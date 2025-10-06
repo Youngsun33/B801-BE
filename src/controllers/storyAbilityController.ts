@@ -1,60 +1,57 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 
-// 유저가 보유한 스토리 능력 목록 조회
+// 스토리 능력은 이제 resources 시스템으로 통합됨
+// UserResource를 통해 관리
+
 export const getUserStoryAbilities = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = (req as any).user?.userId;
 
-    const abilities = await prisma.userStoryAbility.findMany({
-      where: { user_id: userId },
-      include: {
-        story_ability: {
-          select: {
-            id: true,
-            name: true,
-            description: true
-          }
-        }
-      },
-      orderBy: {
-        obtained_at: 'desc'
+    if (!userId) {
+      return res.status(401).json({ error: '인증이 필요합니다.' });
+    }
+
+    // resources 테이블에서 SKILL 타입 조회
+    const abilities = await prisma.$queryRaw<any[]>`
+      SELECT ur.*, r.name, r.description, r.id as resource_id
+      FROM user_resources ur
+      JOIN resources r ON ur.resource_id = r.id
+      WHERE ur.user_id = ${userId} AND r.type = 'SKILL'
+      ORDER BY r.name
+    `;
+
+    // 프론트엔드 형식에 맞게 변환
+    const storyAbilities = abilities.map(a => ({
+      userStoryAbilityId: a.id,
+      quantity: a.quantity,
+      obtainedAt: a.obtained_at,
+      storyAbility: {
+        id: a.resource_id,
+        name: a.name,
+        description: a.description
       }
-    });
-
-    const formattedAbilities = abilities.map((usa: any) => ({
-      userStoryAbilityId: usa.id,
-      quantity: usa.quantity,
-      obtainedAt: usa.obtained_at,
-      storyAbility: usa.story_ability
     }));
 
-    return res.status(200).json({
-      storyAbilities: formattedAbilities
-    });
+    return res.status(200).json({ storyAbilities });
 
   } catch (error) {
-    console.error('Get user story abilities error:', error);
+    console.error('사용자 능력 조회 오류:', error);
     return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   }
 };
 
-// 모든 스토리 능력 목록 조회 (마스터 데이터)
 export const getAllStoryAbilities = async (req: Request, res: Response) => {
   try {
-    const abilities = await prisma.storyAbility.findMany({
-      orderBy: {
-        id: 'asc'
-      }
-    });
+    // 모든 능력 목록 조회
+    const abilities = await prisma.$queryRaw<any[]>`
+      SELECT * FROM resources WHERE type = 'SKILL' ORDER BY name
+    `;
 
-    return res.status(200).json({
-      storyAbilities: abilities
-    });
+    return res.status(200).json({ abilities });
 
   } catch (error) {
-    console.error('Get all story abilities error:', error);
+    console.error('능력 목록 조회 오류:', error);
     return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   }
 };
-
