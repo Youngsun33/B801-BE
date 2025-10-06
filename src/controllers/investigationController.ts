@@ -63,14 +63,21 @@ export const startInvestigation = async (req: Request, res: Response) => {
       });
     }
 
-    // 5. 새로운 조사 세션 시작 (항상 노드 1부터)
+    // 5. 새로운 조사 세션 시작 (항상 노드 1부터, HP 3, Energy 3)
     await prisma.$executeRaw`
       INSERT INTO investigation_sessions 
       (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
       VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
     
-    console.log('새 조사 세션 시작 - 노드 1부터');
+    // users 테이블도 HP 3, Energy 3으로 리셋 (조사 시작 시)
+    await prisma.$executeRaw`
+      UPDATE users 
+      SET hp = 3, energy = 3
+      WHERE id = ${userId}
+    `;
+    
+    console.log('새 조사 세션 시작 - 노드 1부터, HP: 3, Energy: 3');
 
     // 6. 조사 횟수 증가
     await prisma.$executeRaw`
@@ -323,14 +330,21 @@ export const enterStoryDay = async (req: Request, res: Response) => {
       `;
     }
 
-    // 새로운 조사 세션 시작 (항상 노드 1부터)
+    // 새로운 조사 세션 시작 (항상 노드 1부터, HP 3, Energy 3)
     await prisma.$executeRaw`
       INSERT INTO investigation_sessions 
       (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
       VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
     
-    console.log('새 조사 세션 시작 - 노드 1부터');
+    // users 테이블도 HP 3, Energy 3으로 리셋 (조사 시작 시)
+    await prisma.$executeRaw`
+      UPDATE users 
+      SET hp = 3, energy = 3
+      WHERE id = ${userId}
+    `;
+    
+    console.log('새 조사 세션 시작 - 노드 1부터, HP: 3, Energy: 3');
 
     // 조사 횟수 증가
     await prisma.$executeRaw`
