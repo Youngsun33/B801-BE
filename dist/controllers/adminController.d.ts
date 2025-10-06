@@ -14,6 +14,8 @@ export declare const deleteUserItem: (req: Request, res: Response) => Promise<Re
 export declare const addUserAbility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteUserAbility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteUserCheckpoint: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getAllResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateInvestigationCount: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getAdminStats: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export { upload };
 //# sourceMappingURL=adminController.d.ts.map

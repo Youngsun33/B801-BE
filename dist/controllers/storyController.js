@@ -96,16 +96,18 @@ const getStoryNode = async (req, res) => {
                 }))
             };
         }));
-        const activeSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId} AND status = 'active'
-      ORDER BY started_at DESC
-      LIMIT 1
-    `;
-        const sessionInfo = activeSession.length > 0 ? {
-            hp: activeSession[0].hp,
-            energy: activeSession[0].energy,
-            gold: activeSession[0].gold_start
+        const currentUser = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                hp: true,
+                energy: true,
+                gold: true
+            }
+        });
+        const sessionInfo = currentUser ? {
+            hp: currentUser.hp,
+            energy: currentUser.energy,
+            gold: currentUser.gold
         } : null;
         return res.status(200).json({
             nodeId: nodeData.node_id,
@@ -426,9 +428,9 @@ const chooseStoryOption = async (req, res) => {
               ${nextNode.node_id}, 
               ${checkpointTitle},
               ${checkpointDesc},
-              ${user.hp},
-              ${user.energy},
-              ${user.gold}
+              0,
+              0,
+              0
             )
           `;
                     delta.checkpoint = {
@@ -476,17 +478,29 @@ const chooseStoryOption = async (req, res) => {
                 choices: nextChoicesFormatted
             };
         }
+        const currentUser = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                hp: true,
+                energy: true,
+                gold: true
+            }
+        });
         const updatedSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId}
+      SELECT hp, energy, gold_end FROM investigation_sessions 
+      WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
       LIMIT 1
     `;
-        const sessionInfo = updatedSession.length > 0 ? {
+        const sessionInfo = currentUser ? {
+            hp: currentUser.hp,
+            energy: currentUser.energy,
+            gold: currentUser.gold
+        } : (updatedSession.length > 0 ? {
             hp: updatedSession[0].hp,
             energy: updatedSession[0].energy,
-            gold: updatedSession[0].gold_start
-        } : null;
+            gold: updatedSession[0].gold_end || 0
+        } : null);
         return res.status(200).json({
             success: true,
             delta,

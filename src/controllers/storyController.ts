@@ -129,18 +129,20 @@ export const getStoryNode = async (req: Request, res: Response) => {
       })
     );
 
-    // 활성 세션 정보 조회
-    const activeSession = await prisma.$queryRaw<any[]>`
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId} AND status = 'active'
-      ORDER BY started_at DESC
-      LIMIT 1
-    `;
+    // 현재 유저 정보 조회 (실시간 HP, 에너지, 골드)
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        hp: true,
+        energy: true,
+        gold: true
+      }
+    });
 
-    const sessionInfo = activeSession.length > 0 ? {
-      hp: activeSession[0].hp,
-      energy: activeSession[0].energy,
-      gold: activeSession[0].gold_start
+    const sessionInfo = currentUser ? {
+      hp: currentUser.hp,
+      energy: currentUser.energy,
+      gold: currentUser.gold
     } : null;
 
     return res.status(200).json({
@@ -603,19 +605,33 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       };
     }
 
-    // 최신 세션 정보 조회 (엔딩/조사종료 후에는 completed 상태일 수 있음)
+    // 최신 유저 정보 조회 (현재 HP, 에너지, 골드)
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        hp: true,
+        energy: true,
+        gold: true
+      }
+    });
+
+    // 세션 정보도 함께 조회
     const updatedSession = await prisma.$queryRaw<any[]>`
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId}
+      SELECT hp, energy, gold_end FROM investigation_sessions 
+      WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
       LIMIT 1
     `;
 
-    const sessionInfo = updatedSession.length > 0 ? {
+    const sessionInfo = currentUser ? {
+      hp: currentUser.hp,
+      energy: currentUser.energy,
+      gold: currentUser.gold
+    } : (updatedSession.length > 0 ? {
       hp: updatedSession[0].hp,
       energy: updatedSession[0].energy,
-      gold: updatedSession[0].gold_start
-    } : null;
+      gold: updatedSession[0].gold_end || 0
+    } : null);
 
       return res.status(200).json({
       success: true,
