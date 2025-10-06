@@ -275,6 +275,7 @@ model InvestigationSession {
   gold_start      Int
   gold_end        Int?
   current_node_id Int?
+  temp_data       String?   // 임시 데이터 저장용 JSON 필드
   status          String    @default("active")
   started_at      DateTime  @default(now())
   ended_at        DateTime?
