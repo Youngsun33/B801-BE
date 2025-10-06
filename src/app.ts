@@ -34,7 +34,9 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://b801-fe.azurewebsites.net', 'https://b801-frontend.azurewebsites.net'] // 프론트엔드 URL들
+    : 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -68,7 +70,13 @@ app.use('/api/investigation', investigationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
+    database: process.env.DATABASE_URL ? 'configured' : 'missing'
+  });
 });
 
 // Error handling middleware
