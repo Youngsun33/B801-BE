@@ -62,4 +62,10 @@ jobs:
           app-name: 'B801-BE'
           slot-name: 'Production'
           package: .
+          app-settings: |
+            NODE_ENV=production
+            PORT=8080
+            JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }}
+            JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+            DATABASE_URL=file:./dev.db
           
