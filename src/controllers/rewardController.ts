@@ -254,7 +254,7 @@ export const getDayLeaderboard = async (req: Request, res: Response) => {
 
     // 전투 로그에서 통계 계산
     const battleStates = require('./battleController').battleStates || {};
-    const leaderboardData = raidTeams.map(team => {
+    const leaderboardData = raidTeams.map((team: any) => {
       const battle = battleStates[team.id];
       let totalDamage = 0;
       let clearTime = battle?.battleLogs?.length || 999;
@@ -282,13 +282,13 @@ export const getDayLeaderboard = async (req: Request, res: Response) => {
 
     // 정렬
     if (type === 'damage') {
-      leaderboardData.sort((a, b) => b.totalDamage - a.totalDamage);
+      leaderboardData.sort((a: any, b: any) => b.totalDamage - a.totalDamage);
     } else if (type === 'clearTime') {
-      leaderboardData.sort((a, b) => a.clearTime - b.clearTime);
+      leaderboardData.sort((a: any, b: any) => a.clearTime - b.clearTime);
     }
 
     // 순위 추가
-    const rankedData = leaderboardData.map((team, index) => ({
+    const rankedData = leaderboardData.map((team: any, index: number) => ({
       rank: index + 1,
       ...team
     }));

@@ -1,28 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRemainingInvestigations = exports.enterStoryDay = exports.endInvestigation = exports.updateSessionStats = exports.getCurrentSession = exports.startInvestigation = void 0;
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = require("../lib/prisma");
 const startInvestigation = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.prisma.user.findUnique({
             where: { id: userId }
         });
         if (!user) {
             return res.status(404).json({ error: '유저를 찾을 수 없습니다.' });
         }
         const currentDay = user.current_day;
-        let dailyCount = await prisma.$queryRaw `
+        let dailyCount = await prisma_1.prisma.$queryRaw `
       SELECT * FROM daily_investigation_count 
       WHERE user_id = ${userId} AND day = ${currentDay}
     `;
         if (dailyCount.length === 0) {
-            await prisma.$executeRaw `
+            await prisma_1.prisma.$executeRaw `
         INSERT INTO daily_investigation_count (user_id, day, count)
         VALUES (${userId}, ${currentDay}, 0)
       `;
-            dailyCount = await prisma.$queryRaw `
+            dailyCount = await prisma_1.prisma.$queryRaw `
         SELECT * FROM daily_investigation_count 
         WHERE user_id = ${userId} AND day = ${currentDay}
       `;
@@ -35,7 +34,7 @@ const startInvestigation = async (req, res) => {
                 currentDay
             });
         }
-        const activeSessions = await prisma.$queryRaw `
+        const activeSessions = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -48,18 +47,18 @@ const startInvestigation = async (req, res) => {
                 remainingInvestigations: 3 - investigationCount
             });
         }
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       INSERT INTO investigation_sessions 
       (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
       VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
         console.log('새 조사 세션 시작 - 노드 1부터');
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       UPDATE daily_investigation_count 
       SET count = ${investigationCount + 1}
       WHERE user_id = ${userId} AND day = ${currentDay}
     `;
-        const newSession = await prisma.$queryRaw `
+        const newSession = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -81,7 +80,7 @@ exports.startInvestigation = startInvestigation;
 const getCurrentSession = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const activeSessions = await prisma.$queryRaw `
+        const activeSessions = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -102,7 +101,7 @@ const updateSessionStats = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { hp, energy, gold } = req.body;
-        const activeSessions = await prisma.$queryRaw `
+        const activeSessions = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -114,15 +113,15 @@ const updateSessionStats = async (req, res) => {
         const session = activeSessions[0];
         const shouldEnd = hp <= 0 || energy <= 0;
         if (shouldEnd) {
-            await prisma.$executeRaw `
+            await prisma_1.prisma.$executeRaw `
         UPDATE investigation_sessions 
         SET hp = ${hp}, energy = ${energy}, gold_end = ${gold}, 
             status = 'completed', ended_at = CURRENT_TIMESTAMP
         WHERE id = ${session.id}
       `;
-            await prisma.$executeRaw `
+            await prisma_1.prisma.$executeRaw `
         UPDATE users 
-        SET gold = ${gold}
+        SET hp = ${hp}, energy = ${energy}, gold = ${gold}
         WHERE id = ${userId}
       `;
             return res.json({
@@ -137,14 +136,14 @@ const updateSessionStats = async (req, res) => {
                 ended: true
             });
         }
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       UPDATE investigation_sessions 
       SET hp = ${hp}, energy = ${energy}, gold_end = ${gold}
       WHERE id = ${session.id}
     `;
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       UPDATE users 
-      SET gold = ${gold}
+      SET hp = ${hp}, energy = ${energy}, gold = ${gold}
       WHERE id = ${userId}
     `;
         return res.json({
@@ -167,7 +166,7 @@ exports.updateSessionStats = updateSessionStats;
 const endInvestigation = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const activeSessions = await prisma.$queryRaw `
+        const activeSessions = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -177,18 +176,19 @@ const endInvestigation = async (req, res) => {
             return res.status(404).json({ error: '진행 중인 조사가 없습니다.' });
         }
         const session = activeSessions[0];
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       UPDATE investigation_sessions 
       SET status = 'completed', ended_at = CURRENT_TIMESTAMP
       WHERE id = ${session.id}
     `;
-        if (session.gold_end !== null) {
-            await prisma.$executeRaw `
-        UPDATE users 
-        SET gold = ${session.gold_end}
-        WHERE id = ${userId}
-      `;
-        }
+        const finalHp = session.hp !== null ? session.hp : 3;
+        const finalEnergy = session.energy !== null ? session.energy : 3;
+        const finalGold = session.gold_end !== null ? session.gold_end : session.gold_start;
+        await prisma_1.prisma.$executeRaw `
+      UPDATE users 
+      SET hp = ${finalHp}, energy = ${finalEnergy}, gold = ${finalGold}
+      WHERE id = ${userId}
+    `;
         return res.json({
             message: '조사를 종료했습니다.',
             session: {
@@ -208,23 +208,23 @@ const enterStoryDay = async (req, res) => {
         const userId = req.user.userId;
         const { day } = req.params;
         console.log(`게임 시작 요청: Day ${day}, User ${userId}`);
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.prisma.user.findUnique({
             where: { id: userId }
         });
         if (!user) {
             return res.status(404).json({ error: '유저를 찾을 수 없습니다.' });
         }
         const currentDay = user.current_day;
-        let dailyCount = await prisma.$queryRaw `
+        let dailyCount = await prisma_1.prisma.$queryRaw `
       SELECT * FROM daily_investigation_count 
       WHERE user_id = ${userId} AND day = ${currentDay}
     `;
         if (dailyCount.length === 0) {
-            await prisma.$executeRaw `
+            await prisma_1.prisma.$executeRaw `
         INSERT INTO daily_investigation_count (user_id, day, count)
         VALUES (${userId}, ${currentDay}, 0)
       `;
-            dailyCount = await prisma.$queryRaw `
+            dailyCount = await prisma_1.prisma.$queryRaw `
         SELECT * FROM daily_investigation_count 
         WHERE user_id = ${userId} AND day = ${currentDay}
       `;
@@ -237,7 +237,7 @@ const enterStoryDay = async (req, res) => {
                 currentDay
             });
         }
-        const activeSessions = await prisma.$queryRaw `
+        const activeSessions = await prisma_1.prisma.$queryRaw `
       SELECT * FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
@@ -245,30 +245,30 @@ const enterStoryDay = async (req, res) => {
     `;
         if (activeSessions.length > 0) {
             console.log('기존 활성 세션 종료하고 새로 시작');
-            await prisma.$executeRaw `
+            await prisma_1.prisma.$executeRaw `
         UPDATE investigation_sessions 
         SET status = 'completed', ended_at = CURRENT_TIMESTAMP
         WHERE id = ${activeSessions[0].id}
       `;
         }
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       INSERT INTO investigation_sessions 
       (user_id, day, session_number, hp, energy, gold_start, current_node_id, status)
       VALUES (${userId}, ${currentDay}, ${investigationCount + 1}, 3, 3, ${user.gold}, 1, 'active')
     `;
         console.log('새 조사 세션 시작 - 노드 1부터');
-        await prisma.$executeRaw `
+        await prisma_1.prisma.$executeRaw `
       UPDATE daily_investigation_count 
       SET count = ${investigationCount + 1}
       WHERE user_id = ${userId} AND day = ${currentDay}
     `;
-        const startNodes = await prisma.$queryRaw `
+        const startNodes = await prisma_1.prisma.$queryRaw `
       SELECT * FROM nodes WHERE story_id = 1 AND node_id = 1 LIMIT 1
     `;
         let startNodeData = null;
         if (startNodes.length > 0) {
             const node = startNodes[0];
-            const choices = await prisma.$queryRaw `
+            const choices = await prisma_1.prisma.$queryRaw `
         SELECT c.*, n.node_id as target_node_number
         FROM choices c
         JOIN nodes n ON c.to_node_id = n.id
@@ -279,7 +279,7 @@ const enterStoryDay = async (req, res) => {
                 nodeId: node.node_id,
                 title: node.title,
                 text: node.text_content,
-                choices: choices.map(c => ({
+                choices: choices.map((c) => ({
                     id: c.id,
                     targetNodeId: c.target_node_number,
                     label: c.choice_text,
@@ -308,14 +308,14 @@ exports.enterStoryDay = enterStoryDay;
 const getRemainingInvestigations = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const user = await prisma.user.findUnique({
+        const user = await prisma_1.prisma.user.findUnique({
             where: { id: userId }
         });
         if (!user) {
             return res.status(404).json({ error: '유저를 찾을 수 없습니다.' });
         }
         const currentDay = user.current_day;
-        const dailyCount = await prisma.$queryRaw `
+        const dailyCount = await prisma_1.prisma.$queryRaw `
       SELECT * FROM daily_investigation_count 
       WHERE user_id = ${userId} AND day = ${currentDay}
     `;

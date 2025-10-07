@@ -22,7 +22,7 @@ export const getUserStoryItems = async (req: Request, res: Response) => {
     `;
 
     // 프론트엔드 형식에 맞게 변환
-    const storyItems = items.map(i => ({
+    const storyItems = items.map((i: any) => ({
       userStoryItemId: i.id,
       quantity: i.quantity,
       obtainedAt: i.obtained_at,

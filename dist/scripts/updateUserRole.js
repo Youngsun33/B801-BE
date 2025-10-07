@@ -1,10 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const client_1 = require("@prisma/client");
-const prisma = new client_1.PrismaClient();
+const prisma_1 = require("../lib/prisma");
 async function updateUserRole() {
     try {
-        const updatedUser = await prisma.user.update({
+        const updatedUser = await prisma_1.prisma.user.update({
             where: { username: 'administrator' },
             data: { role: 'admin' },
             select: { id: true, username: true, role: true }
@@ -13,11 +12,11 @@ async function updateUserRole() {
         console.log('사용자명:', updatedUser.username);
         console.log('역할:', updatedUser.role);
         console.log('ID:', updatedUser.id);
-        const allUsers = await prisma.user.findMany({
+        const allUsers = await prisma_1.prisma.user.findMany({
             select: { id: true, username: true, role: true }
         });
         console.log('\n📋 전체 사용자 목록:');
-        allUsers.forEach(user => {
+        allUsers.forEach((user) => {
             console.log(`- ${user.username} (ID: ${user.id}, Role: ${user.role})`);
         });
     }
@@ -25,7 +24,7 @@ async function updateUserRole() {
         console.error('❌ 역할 업데이트 중 오류:', error);
     }
     finally {
-        await prisma.$disconnect();
+        await prisma_1.prisma.$disconnect();
     }
 }
 updateUserRole();

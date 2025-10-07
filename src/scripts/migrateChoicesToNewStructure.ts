@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 async function migrateChoicesToNewStructure() {
   console.log('🔄 기존 choices 데이터를 새로운 구조로 마이그레이션 시작...');

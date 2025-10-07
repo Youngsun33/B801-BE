@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 async function updateUserRole() {
   try {
@@ -22,7 +20,7 @@ async function updateUserRole() {
     });
     
     console.log('\n📋 전체 사용자 목록:');
-    allUsers.forEach(user => {
+    allUsers.forEach((user: any) => {
       console.log(`- ${user.username} (ID: ${user.id}, Role: ${user.role})`);
     });
 

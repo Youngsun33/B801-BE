@@ -109,7 +109,7 @@ const getStoryNode = async (req, res) => {
           ORDER BY ur.id DESC
           LIMIT 2
         `;
-                console.log('   → DB에서 최근 능력:', userAbilities.map(a => a.name));
+                console.log('   → DB에서 최근 능력:', userAbilities.map((a) => a.name));
             }
             if (userAbilities.length > 0) {
                 const abilityText = userAbilities.map((a) => `+ ${a.name}\n${a.description}`).join('\n\n');
@@ -141,7 +141,7 @@ const getStoryNode = async (req, res) => {
                 targetNodeId: choice.target_node_number,
                 label: choice.choice_text,
                 available: choice.is_available,
-                requirements: constraints.map(c => ({
+                requirements: constraints.map((c) => ({
                     type: c.resource_type,
                     name: c.resource_name,
                     value: c.required_value,
@@ -149,16 +149,18 @@ const getStoryNode = async (req, res) => {
                 }))
             };
         }));
-        const activeSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId} AND status = 'active'
-      ORDER BY started_at DESC
-      LIMIT 1
-    `;
-        const sessionInfo = activeSession.length > 0 ? {
-            hp: activeSession[0].hp,
-            energy: activeSession[0].energy,
-            gold: activeSession[0].gold_start
+        const currentUser = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                hp: true,
+                energy: true,
+                gold: true
+            }
+        });
+        const sessionInfo = currentUser ? {
+            hp: currentUser.hp,
+            energy: currentUser.energy,
+            gold: currentUser.gold
         } : null;
         return res.status(200).json({
             nodeId: nodeData.node_id,
@@ -333,6 +335,11 @@ const chooseStoryOption = async (req, res) => {
               SET hp = ${newHp}
               WHERE user_id = ${userId} AND status = 'active'
             `;
+                        await prisma_1.prisma.$executeRaw `
+              UPDATE users 
+              SET hp = ${newHp}
+              WHERE id = ${userId}
+            `;
                         delta.hp = result.value_change;
                         console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
                         if (newHp <= 0) {
@@ -358,6 +365,11 @@ const chooseStoryOption = async (req, res) => {
               UPDATE investigation_sessions 
               SET energy = ${newEnergy}
               WHERE user_id = ${userId} AND status = 'active'
+            `;
+                        await prisma_1.prisma.$executeRaw `
+              UPDATE users 
+              SET energy = ${newEnergy}
+              WHERE id = ${userId}
             `;
                         delta.energy = result.value_change;
                         console.log('정신력 업데이트:', currentEnergy, '→', newEnergy, '(변화:', result.value_change, ')');
@@ -520,9 +532,9 @@ const chooseStoryOption = async (req, res) => {
               ${nextNode.node_id}, 
               ${checkpointTitle},
               ${checkpointDesc},
-              ${user.hp},
-              ${user.energy},
-              ${user.gold}
+              0,
+              0,
+              0
             )
           `;
                     delta.checkpoint = {
@@ -556,7 +568,7 @@ const chooseStoryOption = async (req, res) => {
         WHERE c.from_node_id = ${nextNode.id}
         ORDER BY c.order_num ASC
       `;
-            const nextChoicesFormatted = nextChoices.map(c => ({
+            const nextChoicesFormatted = nextChoices.map((c) => ({
                 id: c.id,
                 targetNodeId: c.target_node_number,
                 label: c.choice_text,
@@ -570,17 +582,29 @@ const chooseStoryOption = async (req, res) => {
                 choices: nextChoicesFormatted
             };
         }
+        const currentUser = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                hp: true,
+                energy: true,
+                gold: true
+            }
+        });
         const updatedSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
-      WHERE user_id = ${userId}
+      SELECT hp, energy, gold_end FROM investigation_sessions 
+      WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
       LIMIT 1
     `;
-        const sessionInfo = updatedSession.length > 0 ? {
+        const sessionInfo = currentUser ? {
+            hp: currentUser.hp,
+            energy: currentUser.energy,
+            gold: currentUser.gold
+        } : (updatedSession.length > 0 ? {
             hp: updatedSession[0].hp,
             energy: updatedSession[0].energy,
-            gold: updatedSession[0].gold_start
-        } : null;
+            gold: updatedSession[0].gold_end || 0
+        } : null);
         return res.status(200).json({
             success: true,
             delta,

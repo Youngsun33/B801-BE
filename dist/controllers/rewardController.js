@@ -212,7 +212,7 @@ const getDayLeaderboard = async (req, res) => {
             }
         });
         const battleStates = require('./battleController').battleStates || {};
-        const leaderboardData = raidTeams.map(team => {
+        const leaderboardData = raidTeams.map((team) => {
             const battle = battleStates[team.id];
             let totalDamage = 0;
             let clearTime = battle?.battleLogs?.length || 999;

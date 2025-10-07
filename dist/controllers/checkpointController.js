@@ -14,7 +14,7 @@ const getUserCheckpoints = async (req, res) => {
             orderBy: { saved_at: 'desc' }
         });
         return res.status(200).json({
-            checkpoints: checkpoints.map(cp => ({
+            checkpoints: checkpoints.map((cp) => ({
                 id: cp.id,
                 nodeId: cp.node_id,
                 title: cp.title,
