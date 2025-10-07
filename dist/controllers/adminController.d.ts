@@ -6,16 +6,6 @@ export declare const getStoryNodes: (req: Request, res: Response) => Promise<Res
 export declare const updateStoryNode: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteStoryNode: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const createStoryNode: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const getAllUsers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const getUserDetail: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const updateUser: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const addUserItem: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const deleteUserItem: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const addUserAbility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const deleteUserAbility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const deleteUserCheckpoint: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const getAllResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const updateInvestigationCount: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getAdminStats: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export { upload };
 //# sourceMappingURL=adminController.d.ts.map

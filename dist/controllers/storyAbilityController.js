@@ -15,7 +15,7 @@ const getUserStoryAbilities = async (req, res) => {
       WHERE ur.user_id = ${userId} AND r.type = 'SKILL'
       ORDER BY r.name
     `;
-        const storyAbilities = abilities.map((a) => ({
+        const storyAbilities = abilities.map(a => ({
             userStoryAbilityId: a.id,
             quantity: a.quantity,
             obtainedAt: a.obtained_at,

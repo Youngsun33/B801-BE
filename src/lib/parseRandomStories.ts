@@ -55,17 +55,8 @@ function parseRequirement(text: string): { skill?: string; level?: number; item?
 function parseRewards(text: string): any[] {
   const rewards: any[] = [];
   
-  // 멘탈은 정신력으로 처리
-  const mentalMatch = text.match(/멘탈\s*([+-]\d+)/);
-  if (mentalMatch) {
-    rewards.push({
-      stat: 'energy',
-      value: parseInt(mentalMatch[1]) * 33.33
-    });
-  }
-
-  // 체력 +1 등 (멘탈 제외)
-  const statMatches = text.matchAll(/(체력|관찰력|근력|민첩함|은신술|손재주|언변술|매력|직감|사격술|게임 실력|생태 지식|요리 실력|응급처치|기계공학|영어|선행|악행)\s*([+-])\s*(\d+)/g);
+  // 체력 +1, 멘탈 -1 등
+  const statMatches = text.matchAll(/(체력|멘탈|관찰력|근력|민첩함|은신술|손재주|언변술|매력|직감|사격술|게임 실력|생태 지식|요리 실력|응급처치|기계공학|영어|선행|악행)\s*([+-])\s*(\d+)/g);
   for (const match of statMatches) {
     rewards.push({
       stat: match[1],

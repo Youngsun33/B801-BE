@@ -15,7 +15,7 @@ const getUserStoryItems = async (req, res) => {
       WHERE ur.user_id = ${userId} AND r.type = 'ITEM'
       ORDER BY r.name
     `;
-        const storyItems = items.map((i) => ({
+        const storyItems = items.map(i => ({
             userStoryItemId: i.id,
             quantity: i.quantity,
             obtainedAt: i.obtained_at,
