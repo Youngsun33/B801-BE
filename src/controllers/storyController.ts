@@ -385,7 +385,29 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       SELECT * FROM nodes WHERE id = ${nextNodeId}
     `;
 
-    const nextNode = nextNodes[0];
+    let nextNode = nextNodes[0];
+
+    // 랜덤 허브(500) 도착 시: DB에서 숫자로 시작하는 랜덤 노드 중 하나를 무작위로 선택
+    if (nextNode && nextNode.node_id === 500) {
+      const candidates = await prisma.$queryRaw<any[]>`
+        SELECT id, node_id FROM nodes 
+        WHERE node_type = 'random' 
+          AND title ~ '^[0-9]'
+      `;
+      if (candidates.length > 0) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        const picked = await prisma.$queryRaw<any[]>`
+          SELECT * FROM nodes WHERE id = ${pick.id}
+        `;
+        if (picked.length > 0) {
+          // 무작위 노드로 대체
+          nextNode = picked[0];
+          console.log(`랜덤 허브 500 → 무작위 랜덤 노드 ${nextNode.node_id}`);
+        }
+      } else {
+        console.warn('랜덤 후보 없음: node_type=random AND title 숫자 시작');
+      }
+    }
 
     // 노드 4에 도착: 랜덤 능력 2개 부여 (튜토리얼이므로 중복 가능)
     if (nextNode && nextNode.node_id === 4) {
