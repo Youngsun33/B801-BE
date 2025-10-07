@@ -8,4 +8,6 @@ export declare const deleteStoryNode: (req: Request, res: Response) => Promise<R
 export declare const createStoryNode: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getAdminStats: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export { upload };
+export declare const getAdminUsers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getAdminResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=adminController.d.ts.map

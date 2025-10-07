@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.upload = exports.getAdminStats = exports.createStoryNode = exports.deleteStoryNode = exports.updateStoryNode = exports.getStoryNodes = exports.importTwineFile = void 0;
+exports.getAdminResources = exports.getAdminUsers = exports.upload = exports.getAdminStats = exports.createStoryNode = exports.deleteStoryNode = exports.updateStoryNode = exports.getStoryNodes = exports.importTwineFile = void 0;
 const prisma_1 = require("../lib/prisma");
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
@@ -147,4 +147,44 @@ const getAdminStats = async (req, res) => {
     }
 };
 exports.getAdminStats = getAdminStats;
+const getAdminUsers = async (req, res) => {
+    try {
+        const users = await prisma_1.prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                hp: true,
+                energy: true,
+                gold: true,
+                attack_power: true,
+                current_day: true,
+                is_alive: true
+            },
+            orderBy: { id: 'asc' }
+        });
+        return res.status(200).json({ users, totalCount: users.length });
+    }
+    catch (error) {
+        console.error('❌ 관리자 사용자 조회 오류:', error);
+        return res.status(500).json({ error: '사용자 목록 조회 중 오류가 발생했습니다.' });
+    }
+};
+exports.getAdminUsers = getAdminUsers;
+const getAdminResources = async (req, res) => {
+    try {
+        const { type } = req.query;
+        const where = type ? { type: String(type) } : {};
+        const resources = await prisma_1.prisma.resource.findMany({
+            where,
+            select: { id: true, name: true, description: true, type: true },
+            orderBy: { id: 'asc' }
+        });
+        return res.status(200).json({ resources, totalCount: resources.length });
+    }
+    catch (error) {
+        console.error('❌ 관리자 리소스 조회 오류:', error);
+        return res.status(500).json({ error: '리소스 목록 조회 중 오류가 발생했습니다.' });
+    }
+};
+exports.getAdminResources = getAdminResources;
 //# sourceMappingURL=adminController.js.map
