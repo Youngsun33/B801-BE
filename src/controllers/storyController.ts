@@ -95,13 +95,12 @@ export const getStoryNode = async (req: Request, res: Response) => {
       }
     }
 
-    // 해당 노드의 선택지 조회 (PK/id 또는 node_id로 잘못 저장된 경우까지 허용)
+    // 해당 노드의 선택지 조회 (DB id 사용)
     const choices = await prisma.$queryRaw<any[]>`
-      SELECT c.*, tn.node_id as target_node_number
+      SELECT c.*, n.node_id as target_node_number
       FROM choices c
-      JOIN nodes fn ON (c.from_node_id = fn.id OR c.from_node_id = fn.node_id)
-      JOIN nodes tn ON (c.to_node_id = tn.id OR c.to_node_id = tn.node_id)
-      WHERE fn.node_id = ${nodeIdNum}
+      JOIN nodes n ON c.to_node_id = n.id
+      WHERE c.from_node_id = ${nodeData.id}
       ORDER BY c.order_num ASC
     `;
 
@@ -599,13 +598,12 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         console.log('생성된 텍스트:', nextNodeText);
       }
 
-      // 다음 노드의 선택지도 함께 조회 (PK/id 또는 node_id로 잘못 저장된 경우까지 허용)
+      // 다음 노드의 선택지도 함께 조회
       const nextChoices = await prisma.$queryRaw<any[]>`
-        SELECT c.*, tn.node_id as target_node_number
+        SELECT c.*, n.node_id as target_node_number
         FROM choices c
-        JOIN nodes fn ON (c.from_node_id = fn.id OR c.from_node_id = fn.node_id)
-        JOIN nodes tn ON (c.to_node_id = tn.id OR c.to_node_id = tn.node_id)
-        WHERE fn.node_id = ${nextNode.node_id}
+        JOIN nodes n ON c.to_node_id = n.id
+        WHERE c.from_node_id = ${nextNode.id}
         ORDER BY c.order_num ASC
       `;
 
