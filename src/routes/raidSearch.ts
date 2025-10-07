@@ -2,6 +2,7 @@ import express from 'express';
 import { Request, Response } from 'express';
 import { Client } from 'pg';
 import { authenticateAccessToken } from '../middleware/auth';
+import { requireAdmin } from '../middleware/admin';
 
 const router = express.Router();
 
@@ -179,7 +180,7 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
 
 // 관리자용 레이드 아이템 관리 API
 // 모든 유저의 레이드 아이템 조회
-router.get('/admin/all-users-items', authenticateAccessToken, async (req: Request, res: Response) => {
+router.get('/admin/all-users-items', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const result = await client.query(`
@@ -204,7 +205,7 @@ router.get('/admin/all-users-items', authenticateAccessToken, async (req: Reques
 });
 
 // 특정 유저의 레이드 아이템 조회
-router.get('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+router.get('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
@@ -226,7 +227,7 @@ router.get('/admin/user-items/:userId', authenticateAccessToken, async (req: Req
 });
 
 // 유저 레이드 아이템 수량 수정
-router.put('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+router.put('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
@@ -266,7 +267,7 @@ router.put('/admin/user-items/:userId', authenticateAccessToken, async (req: Req
 });
 
 // 유저 레이드 아이템 삭제
-router.delete('/admin/user-items/:userId/:itemName', authenticateAccessToken, async (req: Request, res: Response) => {
+router.delete('/admin/user-items/:userId/:itemName', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
@@ -287,7 +288,7 @@ router.delete('/admin/user-items/:userId/:itemName', authenticateAccessToken, as
 });
 
 // 유저 레이드 아이템 추가
-router.post('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+router.post('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
