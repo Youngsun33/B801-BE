@@ -159,16 +159,19 @@ export const getAdminStats = async (req: Request, res: Response) => {
     const storyNodeResult = await prisma.$queryRaw<any[]>`
       SELECT COUNT(*) as count FROM nodes
     `;
-    const storyNodeCount = storyNodeResult[0]?.count || 0;
+    const rawCount = storyNodeResult[0]?.count;
+    const storyNodeCount = typeof rawCount === 'bigint'
+      ? Number(rawCount)
+      : Number(rawCount || 0);
     
     // 현재는 last_login 필드가 없으므로 전체 사용자 수를 활성 사용자로 간주
     const activeUsers = userCount;
 
     return res.status(200).json({
       stats: {
-        totalUsers: userCount,
-        activeUsers: activeUsers,
-        storyNodes: storyNodeCount,
+        totalUsers: Number(userCount),
+        activeUsers: Number(activeUsers),
+        storyNodes: Number(storyNodeCount),
         completedPlays: 0 // TODO: 실제 완료된 플레이 수 계산
       }
     });
