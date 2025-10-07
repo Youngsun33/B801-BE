@@ -95,6 +95,31 @@ export const getStoryNode = async (req: Request, res: Response) => {
       }
     }
 
+    // 날짜 해금 규칙
+    const unlockRules: Record<number, string> = {
+      // 2일차 (2025-10-09)
+      29: '2025-10-09',
+      66: '2025-10-09',
+      122: '2025-10-09',
+      170: '2025-10-09',
+      219: '2025-10-09',
+      279: '2025-10-09',
+      // 3일차 (2025-10-10)
+      38: '2025-10-10',
+      84: '2025-10-10',
+      132: '2025-10-10',
+      186: '2025-10-10',
+      242: '2025-10-10',
+      288: '2025-10-10',
+    };
+
+    const formatDateForKR = (isoDate: string) => {
+      const d = new Date(isoDate + 'T00:00:00');
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      return `${month}월 ${day}일`;
+    };
+
     // 해당 노드의 선택지 조회 (DB id 사용)
     const choices = await prisma.$queryRaw<any[]>`
       SELECT c.*, n.node_id as target_node_number
@@ -114,11 +139,19 @@ export const getStoryNode = async (req: Request, res: Response) => {
           WHERE cc.choice_id = ${choice.id}
         `;
 
+        // 날짜 해금 적용
+        const targetNodeNum: number = choice.target_node_number;
+        const unlockDateIso = unlockRules[targetNodeNum];
+        const today = new Date();
+        const isLockedByDate = !!unlockDateIso && today < new Date(unlockDateIso + 'T00:00:00');
+        const lockedUntil = unlockDateIso ? formatDateForKR(unlockDateIso) : undefined;
+
         return {
           id: choice.id,
           targetNodeId: choice.target_node_number,
           label: choice.choice_text,
-          available: choice.is_available,
+          available: choice.is_available && !isLockedByDate,
+          lockedUntil: isLockedByDate ? lockedUntil : undefined,
           requirements: constraints.map(c => ({
             type: c.resource_type,
             name: c.resource_name,
@@ -392,6 +425,28 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     `;
 
     let nextNode = nextNodes[0];
+
+    // 날짜 해금 규칙 (동일 규칙 재사용)
+    const unlockRules: Record<number, string> = {
+      29: '2025-10-09', 66: '2025-10-09', 122: '2025-10-09', 170: '2025-10-09', 219: '2025-10-09', 279: '2025-10-09',
+      38: '2025-10-10', 84: '2025-10-10', 132: '2025-10-10', 186: '2025-10-10', 242: '2025-10-10', 288: '2025-10-10',
+    };
+    const formatDateForKR = (isoDate: string) => {
+      const d = new Date(isoDate + 'T00:00:00');
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      return `${month}월 ${day}일`;
+    };
+
+    // 날짜 해금 체크: 잠금이면 차단
+    if (nextNode && unlockRules[nextNode.node_id]) {
+      const unlockDateIso = unlockRules[nextNode.node_id];
+      const today = new Date();
+      if (today < new Date(unlockDateIso + 'T00:00:00')) {
+        const whenKR = formatDateForKR(unlockDateIso);
+        return res.status(400).json({ error: `${whenKR} 해금됩니다.` });
+      }
+    }
 
     // 랜덤 허브(500) 도착 시: DB에서 숫자로 시작하는 랜덤 노드 중 하나를 무작위로 선택
     if (nextNode && nextNode.node_id === 500) {
