@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -201,7 +202,55 @@ export const getAdminUsers = async (req: Request, res: Response) => {
       orderBy: { id: 'asc' }
     });
 
-    return res.status(200).json({ users, totalCount: users.length });
+    if (users.length === 0) {
+      return res.status(200).json({ users: [], totalCount: 0 });
+    }
+
+    const userIds = users.map(u => u.id);
+
+    // 현재 day 기준 조사 사용 횟수 가져오기
+    const dailyCounts = await prisma.$queryRaw<any[]>`
+      SELECT user_id, day, count
+      FROM daily_investigation_count
+      WHERE user_id IN (${Prisma.join(userIds)})
+    `;
+
+    // 체크포인트 개수 가져오기
+    const checkpointCounts = await prisma.$queryRaw<any[]>`
+      SELECT user_id, COUNT(*) as cnt
+      FROM user_checkpoints
+      WHERE user_id IN (${Prisma.join(userIds)})
+      GROUP BY user_id
+    `;
+
+    const userIdToDailyByDay: Record<number, Record<number, number>> = {};
+    for (const row of dailyCounts) {
+      const uid = Number(row.user_id);
+      const d = Number(row.day);
+      const c = Number(row.count || 0);
+      if (!userIdToDailyByDay[uid]) userIdToDailyByDay[uid] = {};
+      userIdToDailyByDay[uid][d] = c;
+    }
+
+    const userIdToCheckpointCount: Record<number, number> = {};
+    for (const row of checkpointCounts) {
+      userIdToCheckpointCount[Number(row.user_id)] = Number(row.cnt || 0);
+    }
+
+    const enriched = users.map(u => {
+      const countForCurrentDay = userIdToDailyByDay[u.id]?.[u.current_day] ?? 0;
+      const cpCount = userIdToCheckpointCount[u.id] ?? 0;
+
+      return {
+        ...u,
+        daily_investigation_count: countForCurrentDay >= 0
+          ? [{ day: u.current_day, count: countForCurrentDay }]
+          : [],
+        user_checkpoints: new Array(cpCount).fill(0) // 길이만 쓰므로 더미 배열
+      } as any;
+    });
+
+    return res.status(200).json({ users: enriched, totalCount: enriched.length });
   } catch (error) {
     console.error('❌ 관리자 사용자 조회 오류:', error);
     return res.status(500).json({ error: '사용자 목록 조회 중 오류가 발생했습니다.' });

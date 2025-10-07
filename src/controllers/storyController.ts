@@ -95,12 +95,13 @@ export const getStoryNode = async (req: Request, res: Response) => {
       }
     }
 
-    // 해당 노드의 선택지 조회 (DB id 사용)
+    // 해당 노드의 선택지 조회 (PK/id 또는 node_id로 잘못 저장된 경우까지 허용)
     const choices = await prisma.$queryRaw<any[]>`
-      SELECT c.*, n.node_id as target_node_number
+      SELECT c.*, tn.node_id as target_node_number
       FROM choices c
-      JOIN nodes n ON c.to_node_id = n.id
-      WHERE c.from_node_id = ${nodeData.id}
+      JOIN nodes fn ON (c.from_node_id = fn.id OR c.from_node_id = fn.node_id)
+      JOIN nodes tn ON (c.to_node_id = tn.id OR c.to_node_id = tn.node_id)
+      WHERE fn.node_id = ${nodeIdNum}
       ORDER BY c.order_num ASC
     `;
 
@@ -131,7 +132,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
 
     // 활성 세션 정보 조회
     const activeSession = await prisma.$queryRaw<any[]>`
-      SELECT hp, energy, gold_start FROM investigation_sessions 
+      SELECT hp, energy, gold_start, gold_end FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
       LIMIT 1
@@ -140,7 +141,7 @@ export const getStoryNode = async (req: Request, res: Response) => {
     const sessionInfo = activeSession.length > 0 ? {
       hp: activeSession[0].hp,
       energy: activeSession[0].energy,
-      gold: activeSession[0].gold_start
+      gold: activeSession[0].gold_end ?? activeSession[0].gold_start
     } : null;
 
     return res.status(200).json({
@@ -270,6 +271,12 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
             const newGold = user.gold + result.value_change;
             await prisma.$executeRaw`
               UPDATE users SET gold = ${newGold} WHERE id = ${userId}
+            `;
+            // 세션 gold_end 동기화
+            await prisma.$executeRaw`
+              UPDATE investigation_sessions 
+              SET gold_end = ${newGold}
+              WHERE user_id = ${userId} AND status = 'active'
             `;
             delta.gold = result.value_change;
             console.log('돈 업데이트:', user.gold, '→', newGold);
@@ -483,6 +490,12 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         await prisma.$executeRaw`
           UPDATE users SET gold = ${newGold} WHERE id = ${userId}
         `;
+        // 세션 gold_end 동기화
+        await prisma.$executeRaw`
+          UPDATE investigation_sessions 
+          SET gold_end = ${newGold}
+          WHERE user_id = ${userId} AND status = 'active'
+        `;
         delta.gold = 1;
         console.log('돈 업데이트:', user.gold, '→', newGold);
       }
@@ -586,12 +599,13 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         console.log('생성된 텍스트:', nextNodeText);
       }
 
-      // 다음 노드의 선택지도 함께 조회
+      // 다음 노드의 선택지도 함께 조회 (PK/id 또는 node_id로 잘못 저장된 경우까지 허용)
       const nextChoices = await prisma.$queryRaw<any[]>`
-        SELECT c.*, n.node_id as target_node_number
+        SELECT c.*, tn.node_id as target_node_number
         FROM choices c
-        JOIN nodes n ON c.to_node_id = n.id
-        WHERE c.from_node_id = ${nextNode.id}
+        JOIN nodes fn ON (c.from_node_id = fn.id OR c.from_node_id = fn.node_id)
+        JOIN nodes tn ON (c.to_node_id = tn.id OR c.to_node_id = tn.node_id)
+        WHERE fn.node_id = ${nextNode.node_id}
         ORDER BY c.order_num ASC
       `;
 
@@ -614,7 +628,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
 
     // 최신 세션 정보 조회 (엔딩/조사종료 후에는 completed 상태일 수 있음)
     const updatedSession = await prisma.$queryRaw<any[]>`
-      SELECT hp, energy, gold_start FROM investigation_sessions 
+      SELECT hp, energy, gold_start, gold_end FROM investigation_sessions 
       WHERE user_id = ${userId}
       ORDER BY started_at DESC
       LIMIT 1
@@ -623,7 +637,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     const sessionInfo = updatedSession.length > 0 ? {
       hp: updatedSession[0].hp,
       energy: updatedSession[0].energy,
-      gold: updatedSession[0].gold_start
+      gold: updatedSession[0].gold_end ?? updatedSession[0].gold_start
     } : null;
 
       return res.status(200).json({
