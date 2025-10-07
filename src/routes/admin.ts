@@ -6,6 +6,8 @@ import {
   deleteStoryNode, 
   createStoryNode,
   getAdminStats,
+  getAdminUsers,
+  getAdminResources,
   upload 
 } from '../controllers/adminController';
 import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
@@ -22,8 +24,12 @@ router.use(requireAdmin);
 // GET /api/admin/stats
 router.get('/stats', getAdminStats);
 
-// ===== 유저 관리 라우트 (재구현 예정) =====
-// 현재 관리자 유저/리소스 관리 API는 재구현 예정으로 비활성화됨
+// 관리자 유저/리소스 간단 목록 API
+// GET /api/admin/users
+router.get('/users', getAdminUsers);
+
+// GET /api/admin/resources
+router.get('/resources', getAdminResources);
 
 // Twine 파일 임포트
 // POST /api/admin/import-twine

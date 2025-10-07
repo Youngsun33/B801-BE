@@ -180,3 +180,44 @@ export const getAdminStats = async (req: Request, res: Response) => {
 };
 
 export { upload };
+
+// ===== 임시 관리자 API: 사용자/리소스 목록 =====
+export const getAdminUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        hp: true,
+        energy: true,
+        gold: true,
+        attack_power: true,
+        current_day: true,
+        is_alive: true
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    return res.status(200).json({ users, totalCount: users.length });
+  } catch (error) {
+    console.error('❌ 관리자 사용자 조회 오류:', error);
+    return res.status(500).json({ error: '사용자 목록 조회 중 오류가 발생했습니다.' });
+  }
+};
+
+export const getAdminResources = async (req: Request, res: Response) => {
+  try {
+    const { type } = req.query as { type?: string };
+    const where = type ? { type: String(type) } : {} as any;
+    const resources = await prisma.resource.findMany({
+      where,
+      select: { id: true, name: true, description: true, type: true },
+      orderBy: { id: 'asc' }
+    });
+
+    return res.status(200).json({ resources, totalCount: resources.length });
+  } catch (error) {
+    console.error('❌ 관리자 리소스 조회 오류:', error);
+    return res.status(500).json({ error: '리소스 목록 조회 중 오류가 발생했습니다.' });
+  }
+};
