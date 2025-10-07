@@ -130,13 +130,16 @@ const getAdminStats = async (req, res) => {
         const storyNodeResult = await prisma_1.prisma.$queryRaw `
       SELECT COUNT(*) as count FROM nodes
     `;
-        const storyNodeCount = storyNodeResult[0]?.count || 0;
+        const rawCount = storyNodeResult[0]?.count;
+        const storyNodeCount = typeof rawCount === 'bigint'
+            ? Number(rawCount)
+            : Number(rawCount || 0);
         const activeUsers = userCount;
         return res.status(200).json({
             stats: {
-                totalUsers: userCount,
-                activeUsers: activeUsers,
-                storyNodes: storyNodeCount,
+                totalUsers: Number(userCount),
+                activeUsers: Number(activeUsers),
+                storyNodes: Number(storyNodeCount),
                 completedPlays: 0
             }
         });

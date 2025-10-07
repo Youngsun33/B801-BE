@@ -16,20 +16,23 @@ import { requireAdmin } from '../middleware/admin';
 
 const router = Router();
 
-// 모든 관리자 라우트는 인증과 관리자 권한 필요
+// 모든 관리자 라우트는 인증 필요
 router.use(authenticateAccessToken);
+
+// 관리자 권한 없이 열람 가능한 목록 API (토큰만 필요)
+// GET /api/admin/users
+router.get('/users', getAdminUsers);
+
+// GET /api/admin/resources
+router.get('/resources', getAdminResources);
+
+// 이 아래는 관리자 권한 필요
 router.use(requireAdmin);
 
 // 관리자 통계
 // GET /api/admin/stats
 router.get('/stats', getAdminStats);
 
-// 관리자 유저/리소스 간단 목록 API
-// GET /api/admin/users
-router.get('/users', getAdminUsers);
-
-// GET /api/admin/resources
-router.get('/resources', getAdminResources);
 
 // Twine 파일 임포트
 // POST /api/admin/import-twine
