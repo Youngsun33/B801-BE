@@ -170,10 +170,13 @@ export const getStoryNode = async (req: Request, res: Response) => {
       LIMIT 1
     `;
 
+    // 사용자 테이블에서 현재 골드 가져오기
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
     const sessionInfo = activeSession.length > 0 ? {
       hp: activeSession[0].hp,
       energy: activeSession[0].energy,
-      gold: activeSession[0].gold_end ?? activeSession[0].gold_start
+      gold: user ? user.gold : (activeSession[0].gold_end ?? activeSession[0].gold_start)
     } : null;
 
     return res.status(200).json({
@@ -230,16 +233,12 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     for (const constraint of constraints) {
       let currentValue = 0;
 
-      // STAT 타입(돈, 체력 등)은 세션에서 확인
+      // STAT 타입(돈, 체력 등)은 사용자 테이블에서 확인
       if (constraint.type === 'STAT') {
         if (constraint.name === '돈') {
-          // 세션에서 현재 골드 가져오기
-          const session = await prisma.$queryRaw<any[]>`
-            SELECT gold_end, gold_start FROM investigation_sessions 
-            WHERE user_id = ${userId} AND status = 'active'
-            LIMIT 1
-          `;
-          currentValue = session.length > 0 ? (session[0].gold_end ?? session[0].gold_start) : 0;
+          // 사용자 테이블에서 현재 골드 가져오기
+          const user = await prisma.user.findUnique({ where: { id: userId } });
+          currentValue = user ? user.gold : 0;
         } else if (constraint.name === '체력') {
           const session = await prisma.$queryRaw<any[]>`
             SELECT hp FROM investigation_sessions 
@@ -311,25 +310,26 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       // STAT 타입(체력, 정신력, 돈 등)은 세션에서 관리하고 세션 종료 시 사용자 테이블에 반영
       if (result.type === 'STAT') {
         if (result.name === '돈') {
-          // 현재 세션의 골드 가져오기
-          const session = await prisma.$queryRaw<any[]>`
-            SELECT gold_end, gold_start FROM investigation_sessions 
-            WHERE user_id = ${userId} AND status = 'active'
-            LIMIT 1
-          `;
-          
-          const currentGold = session.length > 0 ? (session[0].gold_end ?? session[0].gold_start) : 0;
-          const newGold = Math.max(0, currentGold + result.value_change);
-          
-          // 세션 gold_end 업데이트만 (사용자 테이블은 세션 종료 시 업데이트)
-          await prisma.$executeRaw`
-            UPDATE investigation_sessions 
-            SET gold_end = ${newGold}
-            WHERE user_id = ${userId} AND status = 'active'
-          `;
-          
-          delta.gold = result.value_change;
-          console.log('세션 골드 업데이트:', currentGold, '→', newGold, '(변화:', result.value_change, ')');
+          // 사용자 테이블에서 현재 골드 가져오기
+          const user = await prisma.user.findUnique({ where: { id: userId } });
+          if (user) {
+            const newGold = Math.max(0, user.gold + result.value_change);
+            
+            // 사용자 테이블에 즉시 업데이트
+            await prisma.$executeRaw`
+              UPDATE users SET gold = ${newGold} WHERE id = ${userId}
+            `;
+            
+            // 세션 gold_end도 동기화
+            await prisma.$executeRaw`
+              UPDATE investigation_sessions 
+              SET gold_end = ${newGold}
+              WHERE user_id = ${userId} AND status = 'active'
+            `;
+            
+            delta.gold = result.value_change;
+            console.log('골드 실시간 업데이트:', user.gold, '→', newGold, '(변화:', result.value_change, ')');
+          }
         } else if (result.name === '체력') {
           // 세션에서 현재 HP 가져오기
           const session = await prisma.$queryRaw<any[]>`
@@ -555,18 +555,17 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
     if (nextNode && nextNode.node_id === 5) {
       console.log('노드 5 도착 - 돈 +1');
 
-      // 현재 세션의 골드 가져오기
-      const session = await prisma.$queryRaw<any[]>`
-        SELECT gold_end, gold_start FROM investigation_sessions 
-        WHERE user_id = ${userId} AND status = 'active'
-        LIMIT 1
-      `;
-      
-      if (session.length > 0) {
-        const currentGold = session[0].gold_end ?? session[0].gold_start;
-        const newGold = currentGold + 1;
+      // 사용자 테이블에서 현재 골드 가져오기
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        const newGold = user.gold + 1;
         
-        // 세션 gold_end 업데이트만
+        // 사용자 테이블에 즉시 업데이트
+        await prisma.$executeRaw`
+          UPDATE users SET gold = ${newGold} WHERE id = ${userId}
+        `;
+        
+        // 세션 gold_end도 동기화
         await prisma.$executeRaw`
           UPDATE investigation_sessions 
           SET gold_end = ${newGold}
@@ -574,7 +573,7 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
         `;
         
         delta.gold = 1;
-        console.log('세션 골드 업데이트 (노드 5):', currentGold, '→', newGold);
+        console.log('골드 실시간 업데이트 (노드 5):', user.gold, '→', newGold);
       }
     }
 
@@ -736,10 +735,13 @@ export const chooseStoryOption = async (req: Request, res: Response) => {
       LIMIT 1
     `;
 
+    // 사용자 테이블에서 현재 골드 가져오기
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+
     const sessionInfo = updatedSession.length > 0 ? {
       hp: updatedSession[0].hp,
       energy: updatedSession[0].energy,
-      gold: updatedSession[0].gold_end ?? updatedSession[0].gold_start
+      gold: currentUser ? currentUser.gold : (updatedSession[0].gold_end ?? updatedSession[0].gold_start)
     } : null;
 
     return res.status(200).json({
