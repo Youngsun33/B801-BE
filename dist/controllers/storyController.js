@@ -69,6 +69,26 @@ const getStoryNode = async (req, res) => {
                 };
             }
         }
+        const unlockRules = {
+            29: '2025-10-09',
+            66: '2025-10-09',
+            122: '2025-10-09',
+            170: '2025-10-09',
+            219: '2025-10-09',
+            279: '2025-10-09',
+            38: '2025-10-10',
+            84: '2025-10-10',
+            132: '2025-10-10',
+            186: '2025-10-10',
+            242: '2025-10-10',
+            288: '2025-10-10',
+        };
+        const formatDateForKR = (isoDate) => {
+            const d = new Date(isoDate + 'T00:00:00');
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            return `${month}월 ${day}일`;
+        };
         const choices = await prisma_1.prisma.$queryRaw `
       SELECT c.*, n.node_id as target_node_number
       FROM choices c
@@ -83,11 +103,17 @@ const getStoryNode = async (req, res) => {
           JOIN resources r ON cc.resource_id = r.id
           WHERE cc.choice_id = ${choice.id}
         `;
+            const targetNodeNum = choice.target_node_number;
+            const unlockDateIso = unlockRules[targetNodeNum];
+            const today = new Date();
+            const isLockedByDate = !!unlockDateIso && today < new Date(unlockDateIso + 'T00:00:00');
+            const lockedUntil = unlockDateIso ? formatDateForKR(unlockDateIso) : undefined;
             return {
                 id: choice.id,
                 targetNodeId: choice.target_node_number,
                 label: choice.choice_text,
-                available: choice.is_available,
+                available: choice.is_available && !isLockedByDate,
+                lockedUntil: isLockedByDate ? lockedUntil : undefined,
                 requirements: constraints.map(c => ({
                     type: c.resource_type,
                     name: c.resource_name,
@@ -97,7 +123,7 @@ const getStoryNode = async (req, res) => {
             };
         }));
         const activeSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
+      SELECT hp, energy, gold_start, gold_end FROM investigation_sessions 
       WHERE user_id = ${userId} AND status = 'active'
       ORDER BY started_at DESC
       LIMIT 1
@@ -105,7 +131,7 @@ const getStoryNode = async (req, res) => {
         const sessionInfo = activeSession.length > 0 ? {
             hp: activeSession[0].hp,
             energy: activeSession[0].energy,
-            gold: activeSession[0].gold_start
+            gold: activeSession[0].gold_end ?? activeSession[0].gold_start
         } : null;
         return res.status(200).json({
             nodeId: nodeData.node_id,
@@ -214,6 +240,11 @@ const chooseStoryOption = async (req, res) => {
                         await prisma_1.prisma.$executeRaw `
               UPDATE users SET gold = ${newGold} WHERE id = ${userId}
             `;
+                        await prisma_1.prisma.$executeRaw `
+              UPDATE investigation_sessions 
+              SET gold_end = ${newGold}
+              WHERE user_id = ${userId} AND status = 'active'
+            `;
                         delta.gold = result.value_change;
                         console.log('돈 업데이트:', user.gold, '→', newGold);
                     }
@@ -314,6 +345,24 @@ const chooseStoryOption = async (req, res) => {
       SELECT * FROM nodes WHERE id = ${nextNodeId}
     `;
         let nextNode = nextNodes[0];
+        const unlockRules = {
+            29: '2025-10-09', 66: '2025-10-09', 122: '2025-10-09', 170: '2025-10-09', 219: '2025-10-09', 279: '2025-10-09',
+            38: '2025-10-10', 84: '2025-10-10', 132: '2025-10-10', 186: '2025-10-10', 242: '2025-10-10', 288: '2025-10-10',
+        };
+        const formatDateForKR = (isoDate) => {
+            const d = new Date(isoDate + 'T00:00:00');
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            return `${month}월 ${day}일`;
+        };
+        if (nextNode && unlockRules[nextNode.node_id]) {
+            const unlockDateIso = unlockRules[nextNode.node_id];
+            const today = new Date();
+            if (today < new Date(unlockDateIso + 'T00:00:00')) {
+                const whenKR = formatDateForKR(unlockDateIso);
+                return res.status(400).json({ error: `${whenKR} 해금됩니다.` });
+            }
+        }
         if (nextNode && nextNode.node_id === 500) {
             const candidates = await prisma_1.prisma.$queryRaw `
         SELECT id, node_id FROM nodes 
@@ -391,6 +440,11 @@ const chooseStoryOption = async (req, res) => {
                 const newGold = user.gold + 1;
                 await prisma_1.prisma.$executeRaw `
           UPDATE users SET gold = ${newGold} WHERE id = ${userId}
+        `;
+                await prisma_1.prisma.$executeRaw `
+          UPDATE investigation_sessions 
+          SET gold_end = ${newGold}
+          WHERE user_id = ${userId} AND status = 'active'
         `;
                 delta.gold = 1;
                 console.log('돈 업데이트:', user.gold, '→', newGold);
@@ -489,7 +543,7 @@ const chooseStoryOption = async (req, res) => {
             };
         }
         const updatedSession = await prisma_1.prisma.$queryRaw `
-      SELECT hp, energy, gold_start FROM investigation_sessions 
+      SELECT hp, energy, gold_start, gold_end FROM investigation_sessions 
       WHERE user_id = ${userId}
       ORDER BY started_at DESC
       LIMIT 1
@@ -497,7 +551,7 @@ const chooseStoryOption = async (req, res) => {
         const sessionInfo = updatedSession.length > 0 ? {
             hp: updatedSession[0].hp,
             energy: updatedSession[0].energy,
-            gold: updatedSession[0].gold_start
+            gold: updatedSession[0].gold_end ?? updatedSession[0].gold_start
         } : null;
         return res.status(200).json({
             success: true,

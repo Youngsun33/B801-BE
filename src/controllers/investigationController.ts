@@ -150,7 +150,7 @@ export const updateSessionStats = async (req: Request, res: Response) => {
     const shouldEnd = hp <= 0 || energy <= 0;
 
     if (shouldEnd) {
-      // 조사 종료
+      // 조사 종료 - 세션 종료 후 골드를 사용자 테이블에 반영
       await prisma.$executeRaw`
         UPDATE investigation_sessions 
         SET hp = ${hp}, energy = ${energy}, gold_end = ${gold}, 
@@ -158,12 +158,14 @@ export const updateSessionStats = async (req: Request, res: Response) => {
         WHERE id = ${session.id}
       `;
 
-      // 유저의 돈 업데이트
+      // 최종 골드를 사용자 테이블에 반영
       await prisma.$executeRaw`
         UPDATE users 
         SET gold = ${gold}
         WHERE id = ${userId}
       `;
+
+      console.log(`조사 종료 - 최종 골드 반영: ${gold}`);
 
       return res.json({
         message: '조사가 종료되었습니다.',
@@ -178,19 +180,14 @@ export const updateSessionStats = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. 세션 업데이트 (진행 중)
+    // 3. 세션 업데이트 (진행 중) - 세션에서만 관리
     await prisma.$executeRaw`
       UPDATE investigation_sessions 
       SET hp = ${hp}, energy = ${energy}, gold_end = ${gold}
       WHERE id = ${session.id}
     `;
-
-    // 4. 유저의 돈 업데이트
-    await prisma.$executeRaw`
-      UPDATE users 
-      SET gold = ${gold}
-      WHERE id = ${userId}
-    `;
+    
+    console.log(`세션 진행 중 - 골드 업데이트: ${gold} (사용자 테이블은 세션 종료 시 반영)`);
 
     return res.json({
       message: '조사 진행 중',
@@ -228,21 +225,22 @@ export const endInvestigation = async (req: Request, res: Response) => {
 
     const session = activeSessions[0];
 
-    // 2. 세션 종료
+    // 2. 세션 종료 및 최종 골드 반영
+    const finalGold = session.gold_end ?? session.gold_start;
     await prisma.$executeRaw`
       UPDATE investigation_sessions 
       SET status = 'completed', ended_at = CURRENT_TIMESTAMP
       WHERE id = ${session.id}
     `;
 
-    // 3. 최종 골드 업데이트
-    if (session.gold_end !== null) {
-      await prisma.$executeRaw`
-        UPDATE users 
-        SET gold = ${session.gold_end}
-        WHERE id = ${userId}
-      `;
-    }
+    // 3. 최종 골드를 사용자 테이블에 반영
+    await prisma.$executeRaw`
+      UPDATE users 
+      SET gold = ${finalGold}
+      WHERE id = ${userId}
+    `;
+    
+    console.log(`수동 조사 종료 - 최종 골드 반영: ${finalGold}`);
 
     return res.json({
       message: '조사를 종료했습니다.',

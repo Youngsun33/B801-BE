@@ -10,4 +10,11 @@ export declare const getAdminStats: (req: Request, res: Response) => Promise<Res
 export { upload };
 export declare const getAdminUsers: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getAdminResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getAdminUserDetail: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateAdminUser: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateUserInvestigationCount: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const addUserItem: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const addUserAbility: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteUserResource: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteUserCheckpoint: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 //# sourceMappingURL=adminController.d.ts.map
