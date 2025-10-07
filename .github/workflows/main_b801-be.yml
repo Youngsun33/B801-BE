@@ -55,7 +55,7 @@ jobs:
       
       - name: Install dependencies and generate Prisma Client
         run: |
-          npm ci --production
+          npm ci
           npx prisma generate
       
       - name: Login to Azure
