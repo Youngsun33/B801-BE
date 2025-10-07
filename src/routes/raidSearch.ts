@@ -68,7 +68,10 @@ router.get('/remaining', authenticateAccessToken, async (req: Request, res: Resp
       return res.status(401).json({ message: '인증이 필요합니다' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // 한국 시간 기준으로 오늘 날짜 계산
+    const now = new Date();
+    const koreaTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+    const today = koreaTime.toISOString().split('T')[0];
     const dayNumber = Math.floor(new Date(today).getTime() / (1000 * 60 * 60 * 24));
 
     // 오늘의 검색 카운트 조회
@@ -103,7 +106,10 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
       return res.status(400).json({ message: '지역 ID가 필요합니다' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // 한국 시간 기준으로 오늘 날짜 계산
+    const now = new Date();
+    const koreaTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+    const today = koreaTime.toISOString().split('T')[0];
     const dayNumber = Math.floor(new Date(today).getTime() / (1000 * 60 * 60 * 24));
 
     // 오늘의 검색 횟수 확인
@@ -132,24 +138,18 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
     const randomIndex = Math.floor(Math.random() * areaItemsResult.rows.length);
     const selectedItem = areaItemsResult.rows[randomIndex];
     
-    // 드롭 확률 확인
-    const dropChance = Math.random() * 100;
-    let foundItem = null;
+    // 항상 아이템 획득 (드롭 확률 100%)
+    const foundItem = { name: selectedItem.item_name, quantity: 1 };
     
-    if (dropChance <= selectedItem.drop_rate) {
-      // 드롭된 경우, 무조건 1개 획득
-      foundItem = { name: selectedItem.item_name, quantity: 1 };
-      
-      // 아이템을 유저 인벤토리에 추가
-      await client.query(`
-        INSERT INTO user_raid_items (user_id, item_name, quantity)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, item_name)
-        DO UPDATE SET 
-          quantity = user_raid_items.quantity + $3,
-          obtained_at = CURRENT_TIMESTAMP
-      `, [userId, foundItem.name, foundItem.quantity]);
-    }
+    // 아이템을 유저 인벤토리에 추가
+    await client.query(`
+      INSERT INTO user_raid_items (user_id, item_name, quantity)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, item_name)
+      DO UPDATE SET 
+        quantity = user_raid_items.quantity + $3,
+        obtained_at = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'
+    `, [userId, foundItem.name, foundItem.quantity]);
 
     // 검색 횟수 증가
     await client.query(`
@@ -165,7 +165,7 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
 
     return res.json({
       success: true,
-      found: foundItem ? true : false,
+      found: true,
       item: foundItem,
       remainingSearches
     });
@@ -226,14 +226,15 @@ router.get('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, a
   }
 });
 
-// 유저 레이드 아이템 수량 수정
-router.put('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
+// 유저 레이드 아이템 수량 수정 (URL에 itemName 포함)
+router.put('/admin/user-items/:userId/:itemName', authenticateAccessToken, requireAdmin, async (req: Request, res: Response) => {
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
-    const { item_name, quantity } = req.body;
+    const itemName = req.params.itemName;
+    const { quantity } = req.body;
     
-    if (!item_name || quantity === undefined) {
+    if (!itemName || quantity === undefined) {
       return res.status(400).json({ message: '아이템명과 수량이 필요합니다' });
     }
     
@@ -246,7 +247,7 @@ router.put('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, a
       await client.query(`
         DELETE FROM user_raid_items 
         WHERE user_id = $1 AND item_name = $2
-      `, [userId, item_name]);
+      `, [userId, itemName]);
     } else {
       // 수량 업데이트 또는 새로 추가
       await client.query(`
@@ -254,7 +255,7 @@ router.put('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, a
         VALUES ($1, $2, $3)
         ON CONFLICT (user_id, item_name)
         DO UPDATE SET quantity = $3
-      `, [userId, item_name, quantity]);
+      `, [userId, itemName, quantity]);
     }
     
     return res.json({ success: true });
@@ -292,9 +293,12 @@ router.post('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, 
   const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
-    const { item_name, quantity } = req.body;
+    const { itemName, item_name, quantity } = req.body;
     
-    if (!item_name || !quantity || quantity <= 0) {
+    // itemName 또는 item_name 둘 다 지원
+    const itemName_final = itemName || item_name;
+    
+    if (!itemName_final || !quantity || quantity <= 0) {
       return res.status(400).json({ message: '아이템명과 양수인 수량이 필요합니다' });
     }
     
@@ -303,7 +307,7 @@ router.post('/admin/user-items/:userId', authenticateAccessToken, requireAdmin, 
       VALUES ($1, $2, $3)
       ON CONFLICT (user_id, item_name)
       DO UPDATE SET quantity = user_raid_items.quantity + $3
-    `, [userId, item_name, quantity]);
+    `, [userId, itemName_final, quantity]);
     
     return res.json({ success: true });
   } catch (error) {

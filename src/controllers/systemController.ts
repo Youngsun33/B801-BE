@@ -9,7 +9,7 @@ const noticesQuerySchema = z.object({
 
 // 게임 시간 설정 (예시)
 const GAME_SCHEDULE = {
-  investigation: { start: '09:00', end: '12:00' },
+  investigation: { start: '11:00', end: '00:00' },  // 11:00부터 00:00(자정)까지
   shop: { start: '12:00', end: '18:00' },
   raid: { start: '18:00', end: '21:00' }
 };
@@ -24,8 +24,10 @@ const getCurrentPhase = (): 'investigation' | 'shop' | 'raid' | 'rest' => {
     minute: '2-digit'
   });
 
-  if (currentTime >= '09:00' && currentTime < '12:00') {
-    return 'investigation';
+  if (currentTime >= '11:00' && currentTime < '24:00') {
+    return 'investigation';  // 11:00부터 24:00(자정)까지
+  } else if (currentTime >= '00:00' && currentTime < '11:00') {
+    return 'rest';  // 00:00부터 11:00까지는 휴식 (서치 버튼 비활성화)
   } else if (currentTime >= '12:00' && currentTime < '18:00') {
     return 'shop';
   } else if (currentTime >= '18:00' && currentTime < '21:00') {
