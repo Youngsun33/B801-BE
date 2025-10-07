@@ -5,8 +5,11 @@ import { authenticateAccessToken } from '../middleware/auth';
 
 const router = express.Router();
 const client = new Client({
-  connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@b801-postgres-server.postgres.database.azure.com:5432/postgres?sslmode=require'
+  connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@uct-b801.postgres.database.azure.com:5432/postgres?sslmode=require'
 });
+
+// 데이터베이스 연결
+client.connect().catch(console.error);
 
 // 레이드서치 지역 목록 조회
 router.get('/areas', async (req: Request, res: Response) => {
@@ -25,7 +28,7 @@ router.get('/areas', async (req: Request, res: Response) => {
 });
 
 // 유저의 레이드 아이템 목록 조회
-router.get('/user-items', async (req: Request, res: Response) => {
+router.get('/user-items', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -47,7 +50,7 @@ router.get('/user-items', async (req: Request, res: Response) => {
 });
 
 // 남은 검색 횟수 조회
-router.get('/remaining', async (req: Request, res: Response) => {
+router.get('/remaining', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -74,7 +77,7 @@ router.get('/remaining', async (req: Request, res: Response) => {
 });
 
 // 레이드서치 실행
-router.post('/search', async (req: Request, res: Response) => {
+router.post('/search', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {

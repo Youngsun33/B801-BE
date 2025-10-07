@@ -4,46 +4,42 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const pg_1 = require("pg");
+const prisma_1 = require("../lib/prisma");
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-const client = new pg_1.Client({
-    connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@b801-postgres-server.postgres.database.azure.com:5432/postgres?sslmode=require'
-});
 router.get('/areas', async (req, res) => {
     try {
-        const result = await client.query(`
-      SELECT id, name, description 
-      FROM raid_search_areas 
-      ORDER BY id
-    `);
-        res.json(result.rows);
+        const areas = await prisma_1.prisma.raidSearchArea.findMany({
+            orderBy: { id: 'asc' }
+        });
+        res.json(areas);
     }
     catch (error) {
         console.error('지역 목록 조회 오류:', error);
         res.status(500).json({ message: '지역 목록 조회 실패' });
     }
 });
-router.get('/user-items', async (req, res) => {
+router.get('/user-items', auth_1.authenticateAccessToken, async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
             return res.status(401).json({ message: '인증이 필요합니다' });
         }
-        const result = await client.query(`
-      SELECT item_name, quantity 
-      FROM user_raid_items 
-      WHERE user_id = $1 AND quantity > 0
-      ORDER BY item_name
-    `, [userId]);
-        return res.json(result.rows);
+        const userItems = await prisma_1.prisma.userRaidItem.findMany({
+            where: {
+                user_id: userId,
+                quantity: { gt: 0 }
+            },
+            orderBy: { item_name: 'asc' }
+        });
+        return res.json(userItems);
     }
     catch (error) {
         console.error('유저 아이템 조회 오류:', error);
         return res.status(500).json({ message: '아이템 목록 조회 실패' });
     }
 });
-router.get('/remaining', async (req, res) => {
+router.get('/remaining', auth_1.authenticateAccessToken, async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
@@ -51,11 +47,15 @@ router.get('/remaining', async (req, res) => {
         }
         const today = new Date().toISOString().split('T')[0];
         const dayNumber = Math.floor(new Date(today).getTime() / (1000 * 60 * 60 * 24));
-        const countResult = await client.query(`
-      SELECT count FROM daily_raid_search_count 
-      WHERE user_id = $1 AND day = $2
-    `, [userId, dayNumber]);
-        const currentCount = countResult.rows[0]?.count || 0;
+        const dailyCount = await prisma_1.prisma.dailyRaidSearchCount.findUnique({
+            where: {
+                user_id_day: {
+                    user_id: userId,
+                    day: dayNumber
+                }
+            }
+        });
+        const currentCount = dailyCount?.count || 0;
         const remainingSearches = Math.max(0, 25 - currentCount);
         return res.json({ remainingSearches });
     }
@@ -64,7 +64,7 @@ router.get('/remaining', async (req, res) => {
         return res.status(500).json({ message: '검색 횟수 조회 실패' });
     }
 });
-router.post('/search', async (req, res) => {
+router.post('/search', auth_1.authenticateAccessToken, async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
@@ -76,24 +76,26 @@ router.post('/search', async (req, res) => {
         }
         const today = new Date().toISOString().split('T')[0];
         const dayNumber = Math.floor(new Date(today).getTime() / (1000 * 60 * 60 * 24));
-        const countResult = await client.query(`
-      SELECT count FROM daily_raid_search_count 
-      WHERE user_id = $1 AND day = $2
-    `, [userId, dayNumber]);
-        const currentCount = countResult.rows[0]?.count || 0;
+        const dailyCount = await prisma_1.prisma.dailyRaidSearchCount.findUnique({
+            where: {
+                user_id_day: {
+                    user_id: userId,
+                    day: dayNumber
+                }
+            }
+        });
+        const currentCount = dailyCount?.count || 0;
         if (currentCount >= 25) {
             return res.status(400).json({ message: '하루 최대 검색 횟수를 초과했습니다' });
         }
-        const areaItemsResult = await client.query(`
-      SELECT item_name, drop_rate 
-      FROM raid_search_area_items 
-      WHERE area_id = $1
-    `, [areaId]);
-        if (areaItemsResult.rows.length === 0) {
+        const areaItems = await prisma_1.prisma.raidSearchAreaItem.findMany({
+            where: { area_id: areaId }
+        });
+        if (areaItems.length === 0) {
             return res.status(400).json({ message: '해당 지역의 아이템 정보를 찾을 수 없습니다' });
         }
         const foundItems = [];
-        areaItemsResult.rows.forEach((item) => {
+        areaItems.forEach((item) => {
             const dropChance = Math.random() * 100;
             if (dropChance <= item.drop_rate) {
                 const quantity = Math.floor(Math.random() * 3) + 1;
@@ -107,21 +109,39 @@ router.post('/search', async (req, res) => {
             }
         });
         for (const item of foundItems) {
-            await client.query(`
-        INSERT INTO user_raid_items (user_id, item_name, quantity)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, item_name)
-        DO UPDATE SET 
-          quantity = user_raid_items.quantity + $3,
-          obtained_at = CURRENT_TIMESTAMP
-      `, [userId, item.name, item.quantity]);
+            await prisma_1.prisma.userRaidItem.upsert({
+                where: {
+                    user_id_item_name: {
+                        user_id: userId,
+                        item_name: item.name
+                    }
+                },
+                update: {
+                    quantity: { increment: item.quantity }
+                },
+                create: {
+                    user_id: userId,
+                    item_name: item.name,
+                    quantity: item.quantity
+                }
+            });
         }
-        await client.query(`
-      INSERT INTO daily_raid_search_count (user_id, day, count)
-      VALUES ($1, $2, 1)
-      ON CONFLICT (user_id, day)
-      DO UPDATE SET count = daily_raid_search_count.count + 1
-    `, [userId, dayNumber]);
+        await prisma_1.prisma.dailyRaidSearchCount.upsert({
+            where: {
+                user_id_day: {
+                    user_id: userId,
+                    day: dayNumber
+                }
+            },
+            update: {
+                count: { increment: 1 }
+            },
+            create: {
+                user_id: userId,
+                day: dayNumber,
+                count: 1
+            }
+        });
         const newCount = currentCount + 1;
         const remainingSearches = Math.max(0, 25 - newCount);
         return res.json({
@@ -137,18 +157,27 @@ router.post('/search', async (req, res) => {
 });
 router.get('/admin/all-users-items', auth_1.authenticateAccessToken, async (req, res) => {
     try {
-        const result = await client.query(`
-      SELECT 
-        u.username,
-        uri.item_name,
-        uri.quantity,
-        uri.obtained_at
-      FROM user_raid_items uri
-      JOIN users u ON uri.user_id = u.id
-      WHERE uri.quantity > 0
-      ORDER BY u.username, uri.item_name
-    `);
-        return res.json(result.rows);
+        const allUserItems = await prisma_1.prisma.userRaidItem.findMany({
+            where: { quantity: { gt: 0 } },
+            include: {
+                user: {
+                    select: {
+                        username: true
+                    }
+                }
+            },
+            orderBy: [
+                { user: { username: 'asc' } },
+                { item_name: 'asc' }
+            ]
+        });
+        const formattedItems = allUserItems.map(item => ({
+            username: item.user.username,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            obtained_at: item.obtained_at
+        }));
+        return res.json(formattedItems);
     }
     catch (error) {
         console.error('전체 유저 레이드 아이템 조회 오류:', error);
@@ -158,13 +187,14 @@ router.get('/admin/all-users-items', auth_1.authenticateAccessToken, async (req,
 router.get('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (req, res) => {
     try {
         const userId = parseInt(req.params.userId);
-        const result = await client.query(`
-      SELECT item_name, quantity, obtained_at
-      FROM user_raid_items
-      WHERE user_id = $1 AND quantity > 0
-      ORDER BY item_name
-    `, [userId]);
-        return res.json(result.rows);
+        const userItems = await prisma_1.prisma.userRaidItem.findMany({
+            where: {
+                user_id: userId,
+                quantity: { gt: 0 }
+            },
+            orderBy: { item_name: 'asc' }
+        });
+        return res.json(userItems);
     }
     catch (error) {
         console.error('유저 레이드 아이템 조회 오류:', error);
@@ -182,18 +212,28 @@ router.put('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (r
             return res.status(400).json({ message: '수량은 0 이상이어야 합니다' });
         }
         if (quantity === 0) {
-            await client.query(`
-        DELETE FROM user_raid_items 
-        WHERE user_id = $1 AND item_name = $2
-      `, [userId, item_name]);
+            await prisma_1.prisma.userRaidItem.deleteMany({
+                where: {
+                    user_id: userId,
+                    item_name: item_name
+                }
+            });
         }
         else {
-            await client.query(`
-        INSERT INTO user_raid_items (user_id, item_name, quantity)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, item_name)
-        DO UPDATE SET quantity = $3
-      `, [userId, item_name, quantity]);
+            await prisma_1.prisma.userRaidItem.upsert({
+                where: {
+                    user_id_item_name: {
+                        user_id: userId,
+                        item_name: item_name
+                    }
+                },
+                update: { quantity: quantity },
+                create: {
+                    user_id: userId,
+                    item_name: item_name,
+                    quantity: quantity
+                }
+            });
         }
         return res.json({ success: true });
     }
@@ -206,10 +246,12 @@ router.delete('/admin/user-items/:userId/:itemName', auth_1.authenticateAccessTo
     try {
         const userId = parseInt(req.params.userId);
         const itemName = req.params.itemName;
-        await client.query(`
-      DELETE FROM user_raid_items 
-      WHERE user_id = $1 AND item_name = $2
-    `, [userId, itemName]);
+        await prisma_1.prisma.userRaidItem.deleteMany({
+            where: {
+                user_id: userId,
+                item_name: itemName
+            }
+        });
         return res.json({ success: true });
     }
     catch (error) {
@@ -224,12 +266,22 @@ router.post('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (
         if (!item_name || !quantity || quantity <= 0) {
             return res.status(400).json({ message: '아이템명과 양수인 수량이 필요합니다' });
         }
-        await client.query(`
-      INSERT INTO user_raid_items (user_id, item_name, quantity)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id, item_name)
-      DO UPDATE SET quantity = user_raid_items.quantity + $3
-    `, [userId, item_name, quantity]);
+        await prisma_1.prisma.userRaidItem.upsert({
+            where: {
+                user_id_item_name: {
+                    user_id: userId,
+                    item_name: item_name
+                }
+            },
+            update: {
+                quantity: { increment: quantity }
+            },
+            create: {
+                user_id: userId,
+                item_name: item_name,
+                quantity: quantity
+            }
+        });
         return res.json({ success: true });
     }
     catch (error) {

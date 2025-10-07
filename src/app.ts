@@ -43,7 +43,11 @@ console.log(`  - JWT_ACCESS_SECRET 설정됨: ${process.env.JWT_ACCESS_SECRET ? 
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://b801-fe.azurewebsites.net', 'https://b801-frontend.azurewebsites.net'] // 프론트엔드 URL들
+    ? [
+        'https://b801-fe.azurewebsites.net', 
+        'https://b801-frontend.azurewebsites.net',
+        'https://lively-stone-0026e4b00.2.azurestaticapps.net'
+      ] // 프론트엔드 URL들
     : 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

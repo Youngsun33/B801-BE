@@ -40,7 +40,11 @@ console.log(`  - JWT_ACCESS_SECRET 설정됨: ${process.env.JWT_ACCESS_SECRET ? 
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({
     origin: process.env.NODE_ENV === 'production'
-        ? ['https://b801-fe.azurewebsites.net', 'https://b801-frontend.azurewebsites.net']
+        ? [
+            'https://b801-fe.azurewebsites.net',
+            'https://b801-frontend.azurewebsites.net',
+            'https://lively-stone-0026e4b00.2.azurestaticapps.net'
+        ]
         : 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
