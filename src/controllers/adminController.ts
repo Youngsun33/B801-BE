@@ -224,3 +224,109 @@ export const getAdminResources = async (req: Request, res: Response) => {
     return res.status(500).json({ error: '리소스 목록 조회 중 오류가 발생했습니다.' });
   }
 };
+
+// 관리자: 특정 사용자 상세 조회 (호환 응답 형식)
+export const getAdminUserDetail = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const userId = Number(id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ error: '유효하지 않은 사용자 ID입니다.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        hp: true,
+        energy: true,
+        gold: true,
+        attack_power: true,
+        current_day: true,
+        is_alive: true,
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 체크포인트 조회
+    const checkpoints = await prisma.$queryRaw<any[]>`
+      SELECT id, user_id, node_id, title, description, hp, energy, gold, saved_at
+      FROM user_checkpoints
+      WHERE user_id = ${userId}
+      ORDER BY saved_at DESC
+    `;
+
+    // 리소스(아이템/능력) 조회 후 프런트 호환 구조로 변환
+    const resources = await prisma.$queryRaw<any[]>`
+      SELECT ur.id, ur.quantity, r.id as resource_id, r.name, r.description, r.type
+      FROM user_resources ur
+      JOIN resources r ON ur.resource_id = r.id
+      WHERE ur.user_id = ${userId}
+      ORDER BY r.name ASC
+    `;
+
+    const user_story_items = resources
+      .filter((r: any) => r.type === 'ITEM')
+      .map((r: any) => ({
+        id: r.id,
+        quantity: r.quantity,
+        story_item: {
+          id: r.resource_id,
+          name: r.name,
+          description: r.description,
+        }
+      }));
+
+    const user_story_abilities = resources
+      .filter((r: any) => r.type === 'SKILL')
+      .map((r: any) => ({
+        id: r.id,
+        quantity: r.quantity,
+        story_ability: {
+          id: r.resource_id,
+          name: r.name,
+          description: r.description,
+        }
+      }));
+
+    // 일일 조사 카운트 (현재 day 기준 한 건만 사용)
+    const daily = await prisma.$queryRaw<any[]>`
+      SELECT day, count FROM daily_investigation_count
+      WHERE user_id = ${userId} AND day = ${user.current_day}
+      LIMIT 1
+    `;
+
+    const daily_investigation_count = daily.length > 0
+      ? [{ day: daily[0].day, count: daily[0].count }]
+      : [];
+
+    const user_checkpoints = checkpoints.map((cp: any) => ({
+      id: cp.id,
+      node_id: cp.node_id,
+      title: cp.title,
+      description: cp.description,
+      hp: cp.hp,
+      energy: cp.energy,
+      gold: cp.gold,
+      saved_at: cp.saved_at,
+    }));
+
+    return res.status(200).json({
+      user: {
+        ...user,
+        user_story_items,
+        user_story_abilities,
+        user_checkpoints,
+        daily_investigation_count,
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ 관리자 사용자 상세 조회 오류:', error);
+    return res.status(500).json({ error: '사용자 상세 조회 중 오류가 발생했습니다.' });
+  }
+};

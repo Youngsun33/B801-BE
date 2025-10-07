@@ -8,6 +8,7 @@ import {
   getAdminStats,
   getAdminUsers,
   getAdminResources,
+  getAdminUserDetail,
   upload 
 } from '../controllers/adminController';
 import { uploadSingle, uploadImage, deleteImage } from '../controllers/uploadController';
@@ -22,6 +23,9 @@ router.use(authenticateAccessToken);
 // 관리자 권한 없이 열람 가능한 목록 API (토큰만 필요)
 // GET /api/admin/users
 router.get('/users', getAdminUsers);
+
+// GET /api/admin/users/:id
+router.get('/users/:id', getAdminUserDetail);
 
 // GET /api/admin/resources
 router.get('/resources', getAdminResources);
