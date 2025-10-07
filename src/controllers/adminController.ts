@@ -330,3 +330,144 @@ export const getAdminUserDetail = async (req: Request, res: Response) => {
     return res.status(500).json({ error: '사용자 상세 조회 중 오류가 발생했습니다.' });
   }
 };
+
+// ===== 관리자: 사용자 수정 / 조사횟수 / 리소스 CRUD =====
+export const updateAdminUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const userId = Number(id);
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ error: '유효하지 않은 사용자 ID입니다.' });
+    }
+
+    const allowedFields = ['hp', 'energy', 'gold', 'attack_power', 'current_day', 'is_alive'] as const;
+    const data: any = {};
+    for (const field of allowedFields) {
+      if (field in req.body) data[field] = req.body[field];
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data
+    });
+
+    return res.status(200).json({ user: updated });
+  } catch (error) {
+    console.error('❌ 관리자 사용자 수정 오류:', error);
+    return res.status(500).json({ error: '사용자 정보를 수정하는 중 오류가 발생했습니다.' });
+  }
+};
+
+export const updateUserInvestigationCount = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const userId = Number(id);
+    const { day, count } = req.body as { day: number; count: number };
+    if (!Number.isFinite(userId) || !Number.isFinite(day) || day <= 0) {
+      return res.status(400).json({ error: '유효하지 않은 파라미터입니다.' });
+    }
+
+    const existing = await prisma.dailyInvestigationCount.findFirst({
+      where: { user_id: userId, day: Number(day) }
+    });
+
+    let result;
+    if (existing) {
+      result = await prisma.dailyInvestigationCount.update({
+        where: { id: existing.id },
+        data: { count: Number(count) }
+      });
+    } else {
+      result = await prisma.dailyInvestigationCount.create({
+        data: { user_id: userId, day: Number(day), count: Number(count) }
+      });
+    }
+
+    return res.status(200).json({ daily_investigation_count: result });
+  } catch (error) {
+    console.error('❌ 조사 횟수 업데이트 오류:', error);
+    return res.status(500).json({ error: '조사 횟수를 업데이트하는 중 오류가 발생했습니다.' });
+  }
+};
+
+async function addUserResourceInternal(userId: number, resourceId: number, quantity: number) {
+  if (!Number.isFinite(userId) || !Number.isFinite(resourceId)) {
+    throw new Error('유효하지 않은 ID');
+  }
+  const qty = Math.max(1, Number(quantity) || 1);
+
+  const existing = await prisma.userResource.findFirst({
+    where: { user_id: userId, resource_id: resourceId }
+  });
+
+  if (existing) {
+    return await prisma.userResource.update({
+      where: { id: existing.id },
+      data: { quantity: existing.quantity + qty }
+    });
+  }
+
+  return await prisma.userResource.create({
+    data: { user_id: userId, resource_id: resourceId, quantity: qty }
+  });
+}
+
+export const addUserItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const userId = Number(id);
+    const { resource_id, quantity } = req.body as { resource_id: number; quantity?: number };
+
+    const created = await addUserResourceInternal(userId, Number(resource_id), Number(quantity) || 1);
+    return res.status(201).json({ user_resource: created });
+  } catch (error) {
+    console.error('❌ 아이템 추가 오류:', error);
+    return res.status(500).json({ error: '아이템을 추가하는 중 오류가 발생했습니다.' });
+  }
+};
+
+export const addUserAbility = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const userId = Number(id);
+    const { resource_id, quantity } = req.body as { resource_id: number; quantity?: number };
+
+    const created = await addUserResourceInternal(userId, Number(resource_id), Number(quantity) || 1);
+    return res.status(201).json({ user_resource: created });
+  } catch (error) {
+    console.error('❌ 능력 추가 오류:', error);
+    return res.status(500).json({ error: '능력을 추가하는 중 오류가 발생했습니다.' });
+  }
+};
+
+export const deleteUserResource = async (req: Request, res: Response) => {
+  try {
+    const { resourceId } = req.params as { resourceId: string };
+    const id = Number(resourceId);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: '유효하지 않은 리소스 ID입니다.' });
+    }
+
+    await prisma.userResource.delete({ where: { id } });
+    return res.status(204).send();
+  } catch (error) {
+    console.error('❌ 사용자 리소스 삭제 오류:', error);
+    return res.status(500).json({ error: '사용자 리소스를 삭제하는 중 오류가 발생했습니다.' });
+  }
+};
+
+export const deleteUserCheckpoint = async (req: Request, res: Response) => {
+  try {
+    const { checkpointId } = req.params as { checkpointId: string };
+    const id = Number(checkpointId);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: '유효하지 않은 체크포인트 ID입니다.' });
+    }
+
+    await prisma.userCheckpoint.delete({ where: { id } });
+    return res.status(204).send();
+  } catch (error) {
+    console.error('❌ 사용자 체크포인트 삭제 오류:', error);
+    return res.status(500).json({ error: '체크포인트를 삭제하는 중 오류가 발생했습니다.' });
+  }
+};
