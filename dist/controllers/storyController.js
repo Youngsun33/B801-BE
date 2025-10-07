@@ -313,7 +313,27 @@ const chooseStoryOption = async (req, res) => {
         const nextNodes = await prisma_1.prisma.$queryRaw `
       SELECT * FROM nodes WHERE id = ${nextNodeId}
     `;
-        const nextNode = nextNodes[0];
+        let nextNode = nextNodes[0];
+        if (nextNode && nextNode.node_id === 500) {
+            const candidates = await prisma_1.prisma.$queryRaw `
+        SELECT id, node_id FROM nodes 
+        WHERE node_type = 'random' 
+          AND title ~ '^[0-9]'
+      `;
+            if (candidates.length > 0) {
+                const pick = candidates[Math.floor(Math.random() * candidates.length)];
+                const picked = await prisma_1.prisma.$queryRaw `
+          SELECT * FROM nodes WHERE id = ${pick.id}
+        `;
+                if (picked.length > 0) {
+                    nextNode = picked[0];
+                    console.log(`랜덤 허브 500 → 무작위 랜덤 노드 ${nextNode.node_id}`);
+                }
+            }
+            else {
+                console.warn('랜덤 후보 없음: node_type=random AND title 숫자 시작');
+            }
+        }
         if (nextNode && nextNode.node_id === 4) {
             console.log('노드 4 도착 - 랜덤 능력 부여 (중복 가능)');
             const basicAbilities = await prisma_1.prisma.$queryRaw `
