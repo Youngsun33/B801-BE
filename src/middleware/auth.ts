@@ -14,16 +14,22 @@ export const authenticateAccessToken = (req: Request, res: Response, next: NextF
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+  console.log('Auth header:', authHeader); // 디버깅용
+  console.log('Token:', token); // 디버깅용
+
   if (!token) {
+    console.log('No token provided');
     res.status(401).json({ error: 'Access token이 필요합니다.' });
     return;
   }
 
   try {
     const payload = verifyAccessToken(token);
+    console.log('Token payload:', payload); // 디버깅용
     req.user = payload;
     next();
   } catch (error) {
+    console.error('Token verification failed:', error); // 디버깅용
     res.status(401).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
   }
 };

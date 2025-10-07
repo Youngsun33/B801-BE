@@ -135,5 +135,107 @@ router.post('/search', auth_1.authenticateAccessToken, async (req, res) => {
         return res.status(500).json({ message: '레이드서치 실행 실패' });
     }
 });
+router.get('/admin/all-users-items', auth_1.authenticateAccessToken, async (req, res) => {
+    try {
+        const result = await client.query(`
+      SELECT 
+        u.username,
+        uri.item_name,
+        uri.quantity,
+        uri.obtained_at
+      FROM user_raid_items uri
+      JOIN users u ON uri.user_id = u.id
+      WHERE uri.quantity > 0
+      ORDER BY u.username, uri.item_name
+    `);
+        return res.json(result.rows);
+    }
+    catch (error) {
+        console.error('전체 유저 레이드 아이템 조회 오류:', error);
+        return res.status(500).json({ message: '아이템 목록 조회 실패' });
+    }
+});
+router.get('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        const result = await client.query(`
+      SELECT item_name, quantity, obtained_at
+      FROM user_raid_items
+      WHERE user_id = $1 AND quantity > 0
+      ORDER BY item_name
+    `, [userId]);
+        return res.json(result.rows);
+    }
+    catch (error) {
+        console.error('유저 레이드 아이템 조회 오류:', error);
+        return res.status(500).json({ message: '아이템 목록 조회 실패' });
+    }
+});
+router.put('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        const { item_name, quantity } = req.body;
+        if (!item_name || quantity === undefined) {
+            return res.status(400).json({ message: '아이템명과 수량이 필요합니다' });
+        }
+        if (quantity < 0) {
+            return res.status(400).json({ message: '수량은 0 이상이어야 합니다' });
+        }
+        if (quantity === 0) {
+            await client.query(`
+        DELETE FROM user_raid_items 
+        WHERE user_id = $1 AND item_name = $2
+      `, [userId, item_name]);
+        }
+        else {
+            await client.query(`
+        INSERT INTO user_raid_items (user_id, item_name, quantity)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, item_name)
+        DO UPDATE SET quantity = $3
+      `, [userId, item_name, quantity]);
+        }
+        return res.json({ success: true });
+    }
+    catch (error) {
+        console.error('아이템 수량 수정 오류:', error);
+        return res.status(500).json({ message: '아이템 수량 수정 실패' });
+    }
+});
+router.delete('/admin/user-items/:userId/:itemName', auth_1.authenticateAccessToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        const itemName = req.params.itemName;
+        await client.query(`
+      DELETE FROM user_raid_items 
+      WHERE user_id = $1 AND item_name = $2
+    `, [userId, itemName]);
+        return res.json({ success: true });
+    }
+    catch (error) {
+        console.error('아이템 삭제 오류:', error);
+        return res.status(500).json({ message: '아이템 삭제 실패' });
+    }
+});
+router.post('/admin/user-items/:userId', auth_1.authenticateAccessToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        const { item_name, quantity } = req.body;
+        if (!item_name || !quantity || quantity <= 0) {
+            return res.status(400).json({ message: '아이템명과 양수인 수량이 필요합니다' });
+        }
+        await client.query(`
+      INSERT INTO user_raid_items (user_id, item_name, quantity)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, item_name)
+      DO UPDATE SET quantity = user_raid_items.quantity + $3
+    `, [userId, item_name, quantity]);
+        return res.json({ success: true });
+    }
+    catch (error) {
+        console.error('아이템 추가 오류:', error);
+        return res.status(500).json({ message: '아이템 추가 실패' });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=raidSearch.js.map

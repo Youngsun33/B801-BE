@@ -5,16 +5,21 @@ const auth_1 = require("../lib/auth");
 const authenticateAccessToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
+    console.log('Auth header:', authHeader);
+    console.log('Token:', token);
     if (!token) {
+        console.log('No token provided');
         res.status(401).json({ error: 'Access token이 필요합니다.' });
         return;
     }
     try {
         const payload = (0, auth_1.verifyAccessToken)(token);
+        console.log('Token payload:', payload);
         req.user = payload;
         next();
     }
     catch (error) {
+        console.error('Token verification failed:', error);
         res.status(401).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
     }
 };
