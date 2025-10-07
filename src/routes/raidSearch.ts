@@ -25,7 +25,7 @@ router.get('/areas', async (req: Request, res: Response) => {
 });
 
 // 유저의 레이드 아이템 목록 조회
-router.get('/user-items', authenticateAccessToken, async (req: Request, res: Response) => {
+router.get('/user-items', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -47,7 +47,7 @@ router.get('/user-items', authenticateAccessToken, async (req: Request, res: Res
 });
 
 // 남은 검색 횟수 조회
-router.get('/remaining', authenticateAccessToken, async (req: Request, res: Response) => {
+router.get('/remaining', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -74,7 +74,7 @@ router.get('/remaining', authenticateAccessToken, async (req: Request, res: Resp
 });
 
 // 레이드서치 실행
-router.post('/search', authenticateAccessToken, async (req: Request, res: Response) => {
+router.post('/search', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {

@@ -24,7 +24,7 @@ router.get('/areas', async (req, res) => {
         res.status(500).json({ message: '지역 목록 조회 실패' });
     }
 });
-router.get('/user-items', auth_1.authenticateAccessToken, async (req, res) => {
+router.get('/user-items', async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
@@ -43,7 +43,7 @@ router.get('/user-items', auth_1.authenticateAccessToken, async (req, res) => {
         return res.status(500).json({ message: '아이템 목록 조회 실패' });
     }
 });
-router.get('/remaining', auth_1.authenticateAccessToken, async (req, res) => {
+router.get('/remaining', async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
@@ -64,7 +64,7 @@ router.get('/remaining', auth_1.authenticateAccessToken, async (req, res) => {
         return res.status(500).json({ message: '검색 횟수 조회 실패' });
     }
 });
-router.post('/search', auth_1.authenticateAccessToken, async (req, res) => {
+router.post('/search', async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {

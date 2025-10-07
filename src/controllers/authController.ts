@@ -52,9 +52,9 @@ export const register = async (req: Request, res: Response) => {
       data: {
         username,
         password: hashedPassword,
-        hp: 100,
-        energy: 100,
-        gold: 1000,
+        hp: 3,
+        energy: 3,
+        gold: 0,
         attack_power: 10,
         current_day: 1,
         is_alive: true
