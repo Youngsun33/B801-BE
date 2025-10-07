@@ -29,6 +29,8 @@ model User {
   user_save_states          UserSaveState[]
   user_story_abilities      UserStoryAbility[]
   user_story_items          UserStoryItem[]
+  raid_search_count         DailyRaidSearchCount[]
+  user_raid_items           UserRaidItem[]
 
   @@map("users")
 }
@@ -419,4 +421,47 @@ enum RaidStatus {
   ongoing
   cleared
   failed
+}
+
+model RaidSearchArea {
+  id          Int                @id @default(autoincrement())
+  name        String             @unique
+  description String?
+  area_items  RaidSearchAreaItem[]
+  
+  @@map("raid_search_areas")
+}
+
+model RaidSearchAreaItem {
+  id           Int           @id @default(autoincrement())
+  area_id      Int
+  item_name    String
+  drop_rate    Int           // 드롭 확률 (퍼센트)
+  area         RaidSearchArea @relation(fields: [area_id], references: [id], onDelete: Cascade)
+  
+  @@map("raid_search_area_items")
+}
+
+model UserRaidItem {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  item_name   String
+  quantity    Int      @default(0)
+  obtained_at DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, item_name], map: "sqlite_autoindex_user_raid_items_1")
+  @@map("user_raid_items")
+}
+
+model DailyRaidSearchCount {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  day        Int
+  count      Int      @default(0)
+  last_reset DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, day], map: "sqlite_autoindex_daily_raid_search_count_1")
+  @@map("daily_raid_search_count")
 }
