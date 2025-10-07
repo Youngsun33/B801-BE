@@ -4,15 +4,19 @@ import { Client } from 'pg';
 import { authenticateAccessToken } from '../middleware/auth';
 
 const router = express.Router();
-const client = new Client({
-  connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@uct-b801.postgres.database.azure.com:5432/postgres?sslmode=require'
-});
 
-// 데이터베이스 연결
-client.connect().catch(console.error);
+// 데이터베이스 연결 함수
+async function getDbConnection() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@uct-b801.postgres.database.azure.com:5432/postgres?sslmode=require'
+  });
+  await client.connect();
+  return client;
+}
 
 // 레이드서치 지역 목록 조회
 router.get('/areas', async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const result = await client.query(`
       SELECT id, name, description 
@@ -24,11 +28,14 @@ router.get('/areas', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('지역 목록 조회 오류:', error);
     res.status(500).json({ message: '지역 목록 조회 실패' });
+  } finally {
+    await client.end();
   }
 });
 
 // 유저의 레이드 아이템 목록 조회
 router.get('/user-items', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -46,11 +53,14 @@ router.get('/user-items', authenticateAccessToken, async (req: Request, res: Res
   } catch (error) {
     console.error('유저 아이템 조회 오류:', error);
     return res.status(500).json({ message: '아이템 목록 조회 실패' });
+  } finally {
+    await client.end();
   }
 });
 
 // 남은 검색 횟수 조회
 router.get('/remaining', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -73,11 +83,14 @@ router.get('/remaining', authenticateAccessToken, async (req: Request, res: Resp
   } catch (error) {
     console.error('검색 횟수 조회 오류:', error);
     return res.status(500).json({ message: '검색 횟수 조회 실패' });
+  } finally {
+    await client.end();
   }
 });
 
-// 레이드서치 실행
+// 레이드서치 실행 - 수정된 로직
 router.post('/search', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -114,29 +127,19 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
       return res.status(400).json({ message: '해당 지역의 아이템 정보를 찾을 수 없습니다' });
     }
 
-    // 랜덤 아이템 선택 (드롭률 기반)
-    const foundItems: { name: string; quantity: number }[] = [];
+    // 랜덤으로 하나의 아이템만 선택
+    const randomIndex = Math.floor(Math.random() * areaItemsResult.rows.length);
+    const selectedItem = areaItemsResult.rows[randomIndex];
     
-    // 각 아이템에 대해 개별적으로 드롭 확률 계산
-    areaItemsResult.rows.forEach((item: any) => {
-      const dropChance = Math.random() * 100;
+    // 드롭 확률 확인
+    const dropChance = Math.random() * 100;
+    let foundItem = null;
+    
+    if (dropChance <= selectedItem.drop_rate) {
+      // 드롭된 경우, 무조건 1개 획득
+      foundItem = { name: selectedItem.item_name, quantity: 1 };
       
-      if (dropChance <= item.drop_rate) {
-        // 드롭된 경우, 수량 결정 (1-3개)
-        const quantity = Math.floor(Math.random() * 3) + 1;
-        
-        // 이미 같은 아이템이 있는지 확인
-        const existingItem = foundItems.find(found => found.name === item.item_name);
-        if (existingItem) {
-          existingItem.quantity += quantity;
-        } else {
-          foundItems.push({ name: item.item_name, quantity });
-        }
-      }
-    });
-
-    // 아이템을 유저 인벤토리에 추가
-    for (const item of foundItems) {
+      // 아이템을 유저 인벤토리에 추가
       await client.query(`
         INSERT INTO user_raid_items (user_id, item_name, quantity)
         VALUES ($1, $2, $3)
@@ -144,7 +147,7 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
         DO UPDATE SET 
           quantity = user_raid_items.quantity + $3,
           obtained_at = CURRENT_TIMESTAMP
-      `, [userId, item.name, item.quantity]);
+      `, [userId, foundItem.name, foundItem.quantity]);
     }
 
     // 검색 횟수 증가
@@ -161,19 +164,23 @@ router.post('/search', authenticateAccessToken, async (req: Request, res: Respon
 
     return res.json({
       success: true,
-      items: foundItems,
+      found: foundItem ? true : false,
+      item: foundItem,
       remainingSearches
     });
 
   } catch (error) {
     console.error('레이드서치 실행 오류:', error);
     return res.status(500).json({ message: '레이드서치 실행 실패' });
+  } finally {
+    await client.end();
   }
 });
 
 // 관리자용 레이드 아이템 관리 API
 // 모든 유저의 레이드 아이템 조회
 router.get('/admin/all-users-items', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const result = await client.query(`
       SELECT 
@@ -190,12 +197,15 @@ router.get('/admin/all-users-items', authenticateAccessToken, async (req: Reques
     return res.json(result.rows);
   } catch (error) {
     console.error('전체 유저 레이드 아이템 조회 오류:', error);
-    return res.status(500).json({ message: '아이템 목록 조회 실패' });
+    return res.status(500).json([]); // 에러 시에도 빈 배열 반환
+  } finally {
+    await client.end();
   }
 });
 
 // 특정 유저의 레이드 아이템 조회
 router.get('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
     
@@ -209,12 +219,15 @@ router.get('/admin/user-items/:userId', authenticateAccessToken, async (req: Req
     return res.json(result.rows);
   } catch (error) {
     console.error('유저 레이드 아이템 조회 오류:', error);
-    return res.status(500).json({ message: '아이템 목록 조회 실패' });
+    return res.status(500).json([]); // 에러 시에도 빈 배열 반환
+  } finally {
+    await client.end();
   }
 });
 
 // 유저 레이드 아이템 수량 수정
 router.put('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
     const { item_name, quantity } = req.body;
@@ -247,11 +260,14 @@ router.put('/admin/user-items/:userId', authenticateAccessToken, async (req: Req
   } catch (error) {
     console.error('아이템 수량 수정 오류:', error);
     return res.status(500).json({ message: '아이템 수량 수정 실패' });
+  } finally {
+    await client.end();
   }
 });
 
 // 유저 레이드 아이템 삭제
 router.delete('/admin/user-items/:userId/:itemName', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
     const itemName = req.params.itemName;
@@ -265,11 +281,14 @@ router.delete('/admin/user-items/:userId/:itemName', authenticateAccessToken, as
   } catch (error) {
     console.error('아이템 삭제 오류:', error);
     return res.status(500).json({ message: '아이템 삭제 실패' });
+  } finally {
+    await client.end();
   }
 });
 
 // 유저 레이드 아이템 추가
 router.post('/admin/user-items/:userId', authenticateAccessToken, async (req: Request, res: Response) => {
+  const client = await getDbConnection();
   try {
     const userId = parseInt(req.params.userId);
     const { item_name, quantity } = req.body;
@@ -289,6 +308,8 @@ router.post('/admin/user-items/:userId', authenticateAccessToken, async (req: Re
   } catch (error) {
     console.error('아이템 추가 오류:', error);
     return res.status(500).json({ message: '아이템 추가 실패' });
+  } finally {
+    await client.end();
   }
 });
 
