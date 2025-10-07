@@ -121,13 +121,23 @@ export const getStoryNode = async (req: Request, res: Response) => {
     };
 
     // 해당 노드의 선택지 조회 (DB id 사용)
-    const choices = await prisma.$queryRaw<any[]>`
+    let choices = await prisma.$queryRaw<any[]>`
       SELECT c.*, n.node_id as target_node_number
       FROM choices c
       JOIN nodes n ON c.to_node_id = n.id
       WHERE c.from_node_id = ${nodeData.id}
       ORDER BY c.order_num ASC
     `;
+
+    // 랜덤 허브 노드들(501-505)에서는 5개만 랜덤 선택
+    if (nodeData.node_id >= 501 && nodeData.node_id <= 505) {
+      if (choices.length > 5) {
+        // 기존 선택지를 섞고 5개만 선택
+        const shuffled = choices.sort(() => Math.random() - 0.5);
+        choices = shuffled.slice(0, 5);
+        console.log(`🎲 랜덤 허브 ${nodeData.node_id}: ${choices.length}개 선택지로 제한 (전체 ${shuffled.length}개 중에서)`);
+      }
+    }
 
     // 각 선택지의 제약조건 조회
     const choicesWithConstraints = await Promise.all(
