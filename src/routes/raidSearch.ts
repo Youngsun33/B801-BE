@@ -52,10 +52,10 @@ router.get('/user-items', authenticateAccessToken, ensureDbConnection, async (re
       ORDER BY item_name
     `, [userId]);
     
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (error) {
     console.error('유저 아이템 조회 오류:', error);
-    res.status(500).json({ message: '아이템 목록 조회 실패' });
+    return res.status(500).json({ message: '아이템 목록 조회 실패' });
   }
 });
 
@@ -79,10 +79,10 @@ router.get('/remaining', authenticateAccessToken, ensureDbConnection, async (req
     const currentCount = countResult.rows[0]?.count || 0;
     const remainingSearches = Math.max(0, 25 - currentCount);
 
-    res.json({ remainingSearches });
+    return res.json({ remainingSearches });
   } catch (error) {
     console.error('검색 횟수 조회 오류:', error);
-    res.status(500).json({ message: '검색 횟수 조회 실패' });
+    return res.status(500).json({ message: '검색 횟수 조회 실패' });
   }
 });
 
@@ -128,7 +128,7 @@ router.post('/search', authenticateAccessToken, ensureDbConnection, async (req: 
     const foundItems: { name: string; quantity: number }[] = [];
     
     // 각 아이템에 대해 개별적으로 드롭 확률 계산
-    areaItemsResult.rows.forEach(item => {
+    areaItemsResult.rows.forEach((item: any) => {
       const dropChance = Math.random() * 100;
       
       if (dropChance <= item.drop_rate) {
@@ -169,7 +169,7 @@ router.post('/search', authenticateAccessToken, ensureDbConnection, async (req: 
     const newCount = currentCount + 1;
     const remainingSearches = Math.max(0, 25 - newCount);
 
-    res.json({
+    return res.json({
       success: true,
       items: foundItems,
       remainingSearches
@@ -177,7 +177,7 @@ router.post('/search', authenticateAccessToken, ensureDbConnection, async (req: 
 
   } catch (error) {
     console.error('레이드서치 실행 오류:', error);
-    res.status(500).json({ message: '레이드서치 실행 실패' });
+    return res.status(500).json({ message: '레이드서치 실행 실패' });
   }
 });
 
