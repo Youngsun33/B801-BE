@@ -89,13 +89,20 @@ const getStoryNode = async (req, res) => {
             const day = d.getDate();
             return `${month}월 ${day}일`;
         };
-        const choices = await prisma_1.prisma.$queryRaw `
+        let choices = await prisma_1.prisma.$queryRaw `
       SELECT c.*, n.node_id as target_node_number
       FROM choices c
       JOIN nodes n ON c.to_node_id = n.id
       WHERE c.from_node_id = ${nodeData.id}
       ORDER BY c.order_num ASC
     `;
+        if (nodeData.node_id >= 501 && nodeData.node_id <= 505) {
+            if (choices.length > 5) {
+                const shuffled = choices.sort(() => Math.random() - 0.5);
+                choices = shuffled.slice(0, 5);
+                console.log(`🎲 랜덤 허브 ${nodeData.node_id}: ${choices.length}개 선택지로 제한 (전체 ${shuffled.length}개 중에서)`);
+            }
+        }
         const choicesWithConstraints = await Promise.all(choices.map(async (choice) => {
             const constraints = await prisma_1.prisma.$queryRaw `
           SELECT cc.*, r.name as resource_name, r.type as resource_type
@@ -128,10 +135,11 @@ const getStoryNode = async (req, res) => {
       ORDER BY started_at DESC
       LIMIT 1
     `;
+        const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
         const sessionInfo = activeSession.length > 0 ? {
             hp: activeSession[0].hp,
             energy: activeSession[0].energy,
-            gold: activeSession[0].gold_end ?? activeSession[0].gold_start
+            gold: user ? user.gold : (activeSession[0].gold_end ?? activeSession[0].gold_start)
         } : null;
         return res.status(200).json({
             nodeId: nodeData.node_id,
@@ -176,17 +184,25 @@ const chooseStoryOption = async (req, res) => {
         for (const constraint of constraints) {
             let currentValue = 0;
             if (constraint.type === 'STAT') {
-                const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
-                if (user) {
-                    if (constraint.name === '돈') {
-                        currentValue = user.gold;
-                    }
-                    else if (constraint.name === '체력') {
-                        currentValue = user.hp;
-                    }
-                    else if (constraint.name === '정신력' || constraint.name === '에너지') {
-                        currentValue = user.energy;
-                    }
+                if (constraint.name === '돈') {
+                    const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
+                    currentValue = user ? user.gold : 0;
+                }
+                else if (constraint.name === '체력') {
+                    const session = await prisma_1.prisma.$queryRaw `
+            SELECT hp FROM investigation_sessions 
+            WHERE user_id = ${userId} AND status = 'active'
+            LIMIT 1
+          `;
+                    currentValue = session.length > 0 ? session[0].hp : 3;
+                }
+                else if (constraint.name === '정신력' || constraint.name === '에너지') {
+                    const session = await prisma_1.prisma.$queryRaw `
+            SELECT energy FROM investigation_sessions 
+            WHERE user_id = ${userId} AND status = 'active'
+            LIMIT 1
+          `;
+                    currentValue = session.length > 0 ? session[0].energy : 3;
                 }
             }
             else {
@@ -233,10 +249,10 @@ const chooseStoryOption = async (req, res) => {
         for (const result of results) {
             console.log('결과 적용:', result.name, result.value_change);
             if (result.type === 'STAT') {
-                const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
-                if (user) {
-                    if (result.name === '돈') {
-                        const newGold = user.gold + result.value_change;
+                if (result.name === '돈') {
+                    const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
+                    if (user) {
+                        const newGold = Math.max(0, user.gold + result.value_change);
                         await prisma_1.prisma.$executeRaw `
               UPDATE users SET gold = ${newGold} WHERE id = ${userId}
             `;
@@ -246,59 +262,59 @@ const chooseStoryOption = async (req, res) => {
               WHERE user_id = ${userId} AND status = 'active'
             `;
                         delta.gold = result.value_change;
-                        console.log('돈 업데이트:', user.gold, '→', newGold);
+                        console.log('골드 실시간 업데이트:', user.gold, '→', newGold, '(변화:', result.value_change, ')');
                     }
-                    else if (result.name === '체력') {
-                        const session = await prisma_1.prisma.$queryRaw `
-              SELECT hp FROM investigation_sessions 
-              WHERE user_id = ${userId} AND status = 'active'
-              LIMIT 1
-            `;
-                        const currentHp = session.length > 0 ? session[0].hp : 3;
-                        const newHp = Math.max(0, Math.min(3, currentHp + result.value_change));
+                }
+                else if (result.name === '체력') {
+                    const session = await prisma_1.prisma.$queryRaw `
+            SELECT hp FROM investigation_sessions 
+            WHERE user_id = ${userId} AND status = 'active'
+            LIMIT 1
+          `;
+                    const currentHp = session.length > 0 ? session[0].hp : 3;
+                    const newHp = Math.max(0, Math.min(3, currentHp + result.value_change));
+                    await prisma_1.prisma.$executeRaw `
+            UPDATE investigation_sessions 
+            SET hp = ${newHp}
+            WHERE user_id = ${userId} AND status = 'active'
+          `;
+                    delta.hp = result.value_change;
+                    console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
+                    if (newHp <= 0) {
+                        delta.sessionEnded = true;
+                        delta.endReason = 'hp_depleted';
                         await prisma_1.prisma.$executeRaw `
               UPDATE investigation_sessions 
-              SET hp = ${newHp}
+              SET status = 'completed', ended_at = CURRENT_TIMESTAMP, hp = 0
               WHERE user_id = ${userId} AND status = 'active'
             `;
-                        delta.hp = result.value_change;
-                        console.log('체력 업데이트:', currentHp, '→', newHp, '(변화:', result.value_change, ')');
-                        if (newHp <= 0) {
-                            delta.sessionEnded = true;
-                            delta.endReason = 'hp_depleted';
-                            await prisma_1.prisma.$executeRaw `
-                UPDATE investigation_sessions 
-                SET status = 'completed', ended_at = CURRENT_TIMESTAMP, hp = 0
-                WHERE user_id = ${userId} AND status = 'active'
-              `;
-                            console.log('체력 소진 - 조사 종료');
-                        }
+                        console.log('체력 소진 - 조사 종료');
                     }
-                    else if (result.name === '정신력' || result.name === '에너지') {
-                        const session = await prisma_1.prisma.$queryRaw `
-              SELECT energy FROM investigation_sessions 
-              WHERE user_id = ${userId} AND status = 'active'
-              LIMIT 1
-            `;
-                        const currentEnergy = session.length > 0 ? session[0].energy : 3;
-                        const newEnergy = Math.max(0, Math.min(3, currentEnergy + result.value_change));
+                }
+                else if (result.name === '정신력' || result.name === '에너지') {
+                    const session = await prisma_1.prisma.$queryRaw `
+            SELECT energy FROM investigation_sessions 
+            WHERE user_id = ${userId} AND status = 'active'
+            LIMIT 1
+          `;
+                    const currentEnergy = session.length > 0 ? session[0].energy : 3;
+                    const newEnergy = Math.max(0, Math.min(3, currentEnergy + result.value_change));
+                    await prisma_1.prisma.$executeRaw `
+            UPDATE investigation_sessions 
+            SET energy = ${newEnergy}
+            WHERE user_id = ${userId} AND status = 'active'
+          `;
+                    delta.energy = result.value_change;
+                    console.log('정신력 업데이트:', currentEnergy, '→', newEnergy, '(변화:', result.value_change, ')');
+                    if (newEnergy <= 0) {
+                        delta.sessionEnded = true;
+                        delta.endReason = 'energy_depleted';
                         await prisma_1.prisma.$executeRaw `
               UPDATE investigation_sessions 
-              SET energy = ${newEnergy}
+              SET status = 'completed', ended_at = CURRENT_TIMESTAMP, energy = 0
               WHERE user_id = ${userId} AND status = 'active'
             `;
-                        delta.energy = result.value_change;
-                        console.log('정신력 업데이트:', currentEnergy, '→', newEnergy, '(변화:', result.value_change, ')');
-                        if (newEnergy <= 0) {
-                            delta.sessionEnded = true;
-                            delta.endReason = 'energy_depleted';
-                            await prisma_1.prisma.$executeRaw `
-                UPDATE investigation_sessions 
-                SET status = 'completed', ended_at = CURRENT_TIMESTAMP, energy = 0
-                WHERE user_id = ${userId} AND status = 'active'
-              `;
-                            console.log('정신력 소진 - 조사 종료');
-                        }
+                        console.log('정신력 소진 - 조사 종료');
                     }
                 }
             }
@@ -447,11 +463,17 @@ const chooseStoryOption = async (req, res) => {
           WHERE user_id = ${userId} AND status = 'active'
         `;
                 delta.gold = 1;
-                console.log('돈 업데이트:', user.gold, '→', newGold);
+                console.log('골드 실시간 업데이트 (노드 5):', user.gold, '→', newGold);
             }
         }
         if (nextNode && nextNode.node_type === 'ending') {
             console.log(`엔딩 노드 ${nextNode.node_id} 도착`);
+            const finalSession = await prisma_1.prisma.$queryRaw `
+        SELECT gold_end, gold_start FROM investigation_sessions 
+        WHERE user_id = ${userId} AND status = 'active'
+        LIMIT 1
+      `;
+            const finalGold = finalSession.length > 0 ? (finalSession[0].gold_end ?? finalSession[0].gold_start) : 0;
             delta.ending = {
                 title: nextNode.title,
                 message: '엔딩에 도달했습니다. 체크포인트에서 다시 시작할 수 있습니다.'
@@ -461,13 +483,24 @@ const chooseStoryOption = async (req, res) => {
         SET status = 'completed', ended_at = CURRENT_TIMESTAMP, hp = 0, energy = 0
         WHERE user_id = ${userId} AND status = 'active'
       `;
+            await prisma_1.prisma.$executeRaw `
+        UPDATE users SET gold = ${finalGold} WHERE id = ${userId}
+      `;
             delta.sessionEnded = true;
             delta.endReason = 'ending';
+            console.log('엔딩 도달 - 최종 골드 반영:', finalGold);
         }
         if (nextNode && (nextNode.node_type === 'checkpoint')) {
             console.log(`체크포인트 노드 ${nextNode.node_id} 도착 - 저장`);
-            const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
-            if (user) {
+            const session = await prisma_1.prisma.$queryRaw `
+        SELECT hp, energy, gold_end, gold_start FROM investigation_sessions 
+        WHERE user_id = ${userId} AND status = 'active'
+        LIMIT 1
+      `;
+            if (session.length > 0) {
+                const currentGold = session[0].gold_end ?? session[0].gold_start;
+                const currentHp = session[0].hp;
+                const currentEnergy = session[0].energy;
                 const existing = await prisma_1.prisma.$queryRaw `
           SELECT * FROM user_checkpoints 
           WHERE user_id = ${userId} AND node_id = ${nextNode.node_id}
@@ -491,16 +524,16 @@ const chooseStoryOption = async (req, res) => {
               ${nextNode.node_id}, 
               ${checkpointTitle},
               ${checkpointDesc},
-              ${user.hp},
-              ${user.energy},
-              ${user.gold}
+              ${currentHp},
+              ${currentEnergy},
+              ${currentGold}
             )
           `;
                     delta.checkpoint = {
                         title: checkpointTitle,
                         message: '체크포인트 도달! 진행 상황이 저장되었습니다.'
                     };
-                    console.log(`체크포인트 저장 완료: ${checkpointTitle}`);
+                    console.log(`체크포인트 저장 완료: ${checkpointTitle} (HP:${currentHp}, Energy:${currentEnergy}, Gold:${currentGold})`);
                 }
                 else {
                     console.log('이미 저장된 체크포인트입니다.');
@@ -548,10 +581,11 @@ const chooseStoryOption = async (req, res) => {
       ORDER BY started_at DESC
       LIMIT 1
     `;
+        const currentUser = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
         const sessionInfo = updatedSession.length > 0 ? {
             hp: updatedSession[0].hp,
             energy: updatedSession[0].energy,
-            gold: updatedSession[0].gold_end ?? updatedSession[0].gold_start
+            gold: currentUser ? currentUser.gold : (updatedSession[0].gold_end ?? updatedSession[0].gold_start)
         } : null;
         return res.status(200).json({
             success: true,

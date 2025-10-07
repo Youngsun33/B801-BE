@@ -125,6 +125,7 @@ const updateSessionStats = async (req, res) => {
         SET gold = ${gold}
         WHERE id = ${userId}
       `;
+            console.log(`조사 종료 - 최종 골드 반영: ${gold}`);
             return res.json({
                 message: '조사가 종료되었습니다.',
                 session: {
@@ -142,11 +143,7 @@ const updateSessionStats = async (req, res) => {
       SET hp = ${hp}, energy = ${energy}, gold_end = ${gold}
       WHERE id = ${session.id}
     `;
-        await prisma.$executeRaw `
-      UPDATE users 
-      SET gold = ${gold}
-      WHERE id = ${userId}
-    `;
+        console.log(`세션 진행 중 - 골드 업데이트: ${gold} (사용자 테이블은 세션 종료 시 반영)`);
         return res.json({
             message: '조사 진행 중',
             session: {
@@ -177,18 +174,18 @@ const endInvestigation = async (req, res) => {
             return res.status(404).json({ error: '진행 중인 조사가 없습니다.' });
         }
         const session = activeSessions[0];
+        const finalGold = session.gold_end ?? session.gold_start;
         await prisma.$executeRaw `
       UPDATE investigation_sessions 
       SET status = 'completed', ended_at = CURRENT_TIMESTAMP
       WHERE id = ${session.id}
     `;
-        if (session.gold_end !== null) {
-            await prisma.$executeRaw `
-        UPDATE users 
-        SET gold = ${session.gold_end}
-        WHERE id = ${userId}
-      `;
-        }
+        await prisma.$executeRaw `
+      UPDATE users 
+      SET gold = ${finalGold}
+      WHERE id = ${userId}
+    `;
+        console.log(`수동 조사 종료 - 최종 골드 반영: ${finalGold}`);
         return res.json({
             message: '조사를 종료했습니다.',
             session: {

@@ -28,6 +28,7 @@ const storyItems_1 = __importDefault(require("./routes/storyItems"));
 const checkpoints_1 = __importDefault(require("./routes/checkpoints"));
 const mainStory_1 = __importDefault(require("./routes/mainStory"));
 const investigation_1 = __importDefault(require("./routes/investigation"));
+const raidSearch_1 = __importDefault(require("./routes/raidSearch"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 console.log('🚀 애플리케이션 시작 중...');
@@ -67,6 +68,7 @@ app.use('/api/story-items', storyItems_1.default);
 app.use('/api/checkpoints', checkpoints_1.default);
 app.use('/api/main-story', mainStory_1.default);
 app.use('/api/investigation', investigation_1.default);
+app.use('/api/raid-search', raidSearch_1.default);
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'OK',

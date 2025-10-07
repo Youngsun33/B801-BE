@@ -8,21 +8,8 @@ const client = new Client({
   connectionString: process.env.DATABASE_URL || 'postgresql://b801admin:admin123!@b801-postgres-server.postgres.database.azure.com:5432/postgres?sslmode=require'
 });
 
-// 미들웨어로 데이터베이스 연결 확인
-const ensureDbConnection = async (req: Request, res: Response, next: Function) => {
-  try {
-    if (!client._connected) {
-      await client.connect();
-    }
-    next();
-  } catch (error) {
-    console.error('Database connection error:', error);
-    res.status(500).json({ message: '데이터베이스 연결 오류' });
-  }
-};
-
 // 레이드서치 지역 목록 조회
-router.get('/areas', ensureDbConnection, async (req: Request, res: Response) => {
+router.get('/areas', async (req: Request, res: Response) => {
   try {
     const result = await client.query(`
       SELECT id, name, description 
@@ -38,7 +25,7 @@ router.get('/areas', ensureDbConnection, async (req: Request, res: Response) => 
 });
 
 // 유저의 레이드 아이템 목록 조회
-router.get('/user-items', authenticateAccessToken, ensureDbConnection, async (req: Request, res: Response) => {
+router.get('/user-items', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
@@ -60,7 +47,7 @@ router.get('/user-items', authenticateAccessToken, ensureDbConnection, async (re
 });
 
 // 남은 검색 횟수 조회
-router.get('/remaining', authenticateAccessToken, ensureDbConnection, async (req: Request, res: Response) => {
+router.get('/remaining', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
@@ -87,7 +74,7 @@ router.get('/remaining', authenticateAccessToken, ensureDbConnection, async (req
 });
 
 // 레이드서치 실행
-router.post('/search', authenticateAccessToken, ensureDbConnection, async (req: Request, res: Response) => {
+router.post('/search', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
