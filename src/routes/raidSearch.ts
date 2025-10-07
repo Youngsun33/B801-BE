@@ -27,7 +27,7 @@ router.get('/areas', async (req: Request, res: Response) => {
 // 유저의 레이드 아이템 목록 조회
 router.get('/user-items', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ message: '인증이 필요합니다' });
     }
@@ -49,7 +49,7 @@ router.get('/user-items', authenticateAccessToken, async (req: Request, res: Res
 // 남은 검색 횟수 조회
 router.get('/remaining', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ message: '인증이 필요합니다' });
     }
@@ -76,7 +76,7 @@ router.get('/remaining', authenticateAccessToken, async (req: Request, res: Resp
 // 레이드서치 실행
 router.post('/search', authenticateAccessToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ message: '인증이 필요합니다' });
     }

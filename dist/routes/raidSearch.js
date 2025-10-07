@@ -26,7 +26,7 @@ router.get('/areas', async (req, res) => {
 });
 router.get('/user-items', auth_1.authenticateAccessToken, async (req, res) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.user?.userId;
         if (!userId) {
             return res.status(401).json({ message: '인증이 필요합니다' });
         }
@@ -45,7 +45,7 @@ router.get('/user-items', auth_1.authenticateAccessToken, async (req, res) => {
 });
 router.get('/remaining', auth_1.authenticateAccessToken, async (req, res) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.user?.userId;
         if (!userId) {
             return res.status(401).json({ message: '인증이 필요합니다' });
         }
@@ -66,7 +66,7 @@ router.get('/remaining', auth_1.authenticateAccessToken, async (req, res) => {
 });
 router.post('/search', auth_1.authenticateAccessToken, async (req, res) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.user?.userId;
         if (!userId) {
             return res.status(401).json({ message: '인증이 필요합니다' });
         }
