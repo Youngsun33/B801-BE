@@ -11,6 +11,7 @@ router.get('/nodes/:nodeId', auth_1.authenticateAccessToken, storyController_1.g
 router.post('/choose', auth_1.authenticateAccessToken, storyController_1.chooseStoryOption);
 router.get('/resources', auth_1.authenticateAccessToken, storyController_1.getUserResources);
 router.post('/day/:day/enter', auth_1.authenticateAccessToken, investigationController_1.enterStoryDay);
+router.post('/recharge', auth_1.authenticateAccessToken, investigationController_1.rechargeInvestigation);
 router.get('/random', auth_1.authenticateAccessToken, randomStoryController_1.getRandomStory);
 router.get('/random/all', auth_1.authenticateAccessToken, randomStoryController_1.getAllRandomStories);
 router.get('/random/:storyId', auth_1.authenticateAccessToken, randomStoryController_1.getRandomStoryById);

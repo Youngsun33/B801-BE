@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRemainingInvestigations = exports.enterStoryDay = exports.endInvestigation = exports.updateSessionStats = exports.getCurrentSession = exports.startInvestigation = void 0;
+exports.rechargeInvestigation = exports.getRemainingInvestigations = exports.enterStoryDay = exports.endInvestigation = exports.updateSessionStats = exports.getCurrentSession = exports.startInvestigation = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const startInvestigation = async (req, res) => {
@@ -330,4 +330,68 @@ const getRemainingInvestigations = async (req, res) => {
     }
 };
 exports.getRemainingInvestigations = getRemainingInvestigations;
+const rechargeInvestigation = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+        if (!user) {
+            return res.status(404).json({ error: '유저를 찾을 수 없습니다.' });
+        }
+        if (user.gold < 2) {
+            return res.status(400).json({
+                error: '골드가 부족합니다.',
+                currentGold: user.gold,
+                required: 2
+            });
+        }
+        const currentDay = user.current_day;
+        let dailyCount = await prisma.$queryRaw `
+      SELECT * FROM daily_investigation_count 
+      WHERE user_id = ${userId} AND day = ${currentDay}
+    `;
+        if (dailyCount.length === 0) {
+            await prisma.$executeRaw `
+        INSERT INTO daily_investigation_count (user_id, day, count)
+        VALUES (${userId}, ${currentDay}, 0)
+      `;
+            dailyCount = await prisma.$queryRaw `
+        SELECT * FROM daily_investigation_count 
+        WHERE user_id = ${userId} AND day = ${currentDay}
+      `;
+        }
+        const investigationCount = dailyCount[0].count;
+        const currentRemaining = 3 - investigationCount;
+        if (currentRemaining >= 3) {
+            return res.status(400).json({
+                error: '조사 기회가 이미 최대입니다.',
+                remaining: currentRemaining
+            });
+        }
+        await prisma.$executeRaw `
+      UPDATE daily_investigation_count 
+      SET count = ${investigationCount - 1}
+      WHERE user_id = ${userId} AND day = ${currentDay}
+    `;
+        await prisma.$executeRaw `
+      UPDATE users 
+      SET gold = ${user.gold - 2}
+      WHERE id = ${userId}
+    `;
+        const newRemaining = 3 - (investigationCount - 1);
+        return res.json({
+            success: true,
+            message: '조사 기회가 충전되었습니다!',
+            remaining: newRemaining,
+            goldSpent: 2,
+            currentGold: user.gold - 2
+        });
+    }
+    catch (error) {
+        console.error('조사 기회 충전 오류:', error);
+        return res.status(500).json({ error: '조사 기회 충전 중 오류가 발생했습니다.' });
+    }
+};
+exports.rechargeInvestigation = rechargeInvestigation;
 //# sourceMappingURL=investigationController.js.map

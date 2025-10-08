@@ -7,7 +7,7 @@ const noticesQuerySchema = zod_1.z.object({
     size: zod_1.z.string().optional().transform(val => val ? parseInt(val) : 10)
 });
 const GAME_SCHEDULE = {
-    investigation: { start: '09:00', end: '12:00' },
+    investigation: { start: '11:00', end: '00:00' },
     shop: { start: '12:00', end: '18:00' },
     raid: { start: '18:00', end: '21:00' }
 };
@@ -19,8 +19,11 @@ const getCurrentPhase = () => {
         hour: '2-digit',
         minute: '2-digit'
     });
-    if (currentTime >= '09:00' && currentTime < '12:00') {
+    if (currentTime >= '11:00' && currentTime < '24:00') {
         return 'investigation';
+    }
+    else if (currentTime >= '00:00' && currentTime < '11:00') {
+        return 'rest';
     }
     else if (currentTime >= '12:00' && currentTime < '18:00') {
         return 'shop';

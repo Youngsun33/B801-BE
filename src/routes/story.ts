@@ -10,7 +10,7 @@ import {
   chooseRandomStoryOption,
   getAllRandomStories
 } from '../controllers/randomStoryController';
-import { getRemainingInvestigations, enterStoryDay } from '../controllers/investigationController';
+import { getRemainingInvestigations, enterStoryDay, rechargeInvestigation } from '../controllers/investigationController';
 import { authenticateAccessToken } from '../middleware/auth';
 
 const router = Router();
@@ -30,6 +30,9 @@ router.get('/resources', authenticateAccessToken, getUserResources);
 
 // POST /api/story/day/:day/enter (게임 시작)
 router.post('/day/:day/enter', authenticateAccessToken, enterStoryDay);
+
+// POST /api/story/recharge (조사 기회 충전)
+router.post('/recharge', authenticateAccessToken, rechargeInvestigation);
 
 // 랜덤 스토리
 // GET /api/story/random
