@@ -469,15 +469,24 @@ export const rechargeInvestigation = async (req: Request, res: Response) => {
     const investigationCount = dailyCount[0].count;
     const currentRemaining = 3 - investigationCount;
 
-    // 조사 기회를 모두 사용했을 때만 충전 가능
-    if (currentRemaining >= 3) {
+    // 조사 기회가 0 이하일 때만 충전 가능
+    if (currentRemaining > 0) {
       return res.status(400).json({ 
-        error: '조사 기회가 이미 최대입니다.',
+        error: '조사 기회가 남아있습니다. 모두 사용한 후 충전할 수 있습니다.',
+        remaining: currentRemaining
+      });
+    }
+
+    // count가 3 이상이어야 충전 가능 (3회 모두 사용한 상태)
+    if (investigationCount < 3) {
+      return res.status(400).json({ 
+        error: '조사 기회를 모두 사용한 후 충전할 수 있습니다.',
         remaining: currentRemaining
       });
     }
 
     // 카운트를 -1 감소 (조사 기회 +1)
+    // count: 3 → 2 (남은 기회: 0 → 1)
     await prisma.$executeRaw`
       UPDATE daily_investigation_count 
       SET count = ${investigationCount - 1}

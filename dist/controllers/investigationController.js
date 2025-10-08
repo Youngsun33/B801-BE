@@ -363,9 +363,15 @@ const rechargeInvestigation = async (req, res) => {
         }
         const investigationCount = dailyCount[0].count;
         const currentRemaining = 3 - investigationCount;
-        if (currentRemaining >= 3) {
+        if (currentRemaining > 0) {
             return res.status(400).json({
-                error: '조사 기회가 이미 최대입니다.',
+                error: '조사 기회가 남아있습니다. 모두 사용한 후 충전할 수 있습니다.',
+                remaining: currentRemaining
+            });
+        }
+        if (investigationCount < 3) {
+            return res.status(400).json({
+                error: '조사 기회를 모두 사용한 후 충전할 수 있습니다.',
                 remaining: currentRemaining
             });
         }
